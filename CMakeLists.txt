@@ -11,4 +11,4 @@ add_executable(hartree_fock_cpp
         src/logger.h
         src/main.cpp
         LICENSE
-        README.md)
+        README.md src/Bsplines.h src/typedefs.h)

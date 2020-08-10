@@ -6,8 +6,6 @@
 #define FORCEINLINE inline
 #endif
 
-#define FORCENOINLINE _declspe(noinline)
-
 // Assertions
 #define ASSERTIONS_ENABLED
 #ifdef ASSERTIONS_ENABLED
