@@ -6,9 +6,8 @@ set(CMAKE_CXX_STANDARD 14)
 include_directories(src)
 
 add_executable(hartree_fock_cpp
-        src/custom_asserts.h
         src/logger.cpp
-        src/logger.h
+        src/ComplexType.cpp
+        src/Bsplines.cpp
         src/main.cpp
-        LICENSE
-        README.md src/Bsplines.h src/typedefs.h)
+        )
