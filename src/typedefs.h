@@ -1,4 +1,5 @@
 #pragma once
+#include <complex>
 
 #ifndef U32_MAX
 #define U32_MAX 0xffffffffui32
@@ -21,6 +22,4 @@ typedef signed char i8;
 typedef double f64;
 typedef float f32;
 
-
-typedef f64 Real;
-
+typedef std::complex<f64> Complex;

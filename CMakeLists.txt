@@ -7,7 +7,6 @@ include_directories(src)
 
 add_executable(hartree_fock_cpp
         src/logger.cpp
-        src/ComplexType.cpp
         src/Bsplines.cpp
         src/main.cpp
-        )
+        src/Grid.cpp)
