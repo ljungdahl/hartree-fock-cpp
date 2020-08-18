@@ -37,43 +37,52 @@ void writeToFile(Atom::Bsplines *Bsplines, Atom::Grid *Grid) {
     FileIO::writeRowColDataToFile(outputData, "../bsplines.dat");
 }
 
-//void testLapack() {
-//    Logger::Trace("Entered testLapack()");
-//
-//    Logger::Trace("Testing CBLAS zgemv y = A*x");
-//
-//    MKL_Complex16 rhs[3] = { Complex(1.0), Complex(2.0), Complex(3.0) };
-//    MKL_Complex16 A[3][3];
-//    for (int i = 0; i < 3; i++) {
-//        A[i][i] = Complex(1.0, 0.0);
-//    }
-//
-//    //A[0][0] = Complex(2.0);
-//    //A[1][0] = Complex(1.0, 0.0);
-//    //A[2][0] = Complex(1.0, 0.0);
-//
+void testLapack() {
+    Logger::Trace("Entered testLapack()");
+
+    Logger::Trace("Testing CBLAS zgemv y = A*x");
+
+    Complex rhs[3] = { Complex(1.0), Complex(2.0), Complex(3.0) };
+    Complex A[3][3];
+    for (int i = 0; i < 1; i++) {
+        A[i][i] = Complex(2.0, 0.0);
+    }
+
+    //A[0][0] = Complex(2.0);
+    //A[1][0] = Complex(1.0, 0.0);
+    //A[2][0] = Complex(1.0, 0.0);
+
 //    CBLAS_LAYOUT Layout = CblasRowMajor;
-//    CBLAS_TRANSPOSE trans = CblasNoTrans;
-//
-//    MKL_INT m = 3, n = m;
-//    MKL_Complex16 alpha = Complex(1.0, 0.0);
-//    void* beta = nullptr;
-//    MKL_INT lda = n, incy = 1, incx = 1;
-//
-//    MKL_Complex16 result[3] = { Complex(1.0) };
-//
-//    Logger::Trace("Before lapack call");
-//
-//
-//    cblas_zgemv(Layout, trans, m, n, &alpha, &A, lda, &rhs, incx, beta, &result, incy);
-//    for (int i = 0; i < 3; i++) {
-//
-//        Logger::Trace("rhs[%i]: (%f, %f), result[%i]: (%f, %f)",
-//                      i, rhs[i].real(), rhs[i].imag(), i, result[i].real(), result[i].imag()
-//        );
-//
-//    }
-//}
+    CBLAS_LAYOUT Layout = CblasColMajor;
+    CBLAS_TRANSPOSE trans = CblasNoTrans;
+
+    MKL_INT m = 3, n = m;
+    Complex alpha = Complex(1.0, 0.0);
+    Complex beta = Complex(0.0, 0.0);
+    MKL_INT lda = n, incy = 1, incx = 1;
+
+    Complex result[3] = { Complex(1.0) };
+
+    Complex aa[2] = { Complex(1.0, 2.0), Complex(3.0, 2.0) };
+    Complex bb[2] = { Complex(3.0, 1.0), Complex(4.0, 2.0) };
+    Complex c;
+
+    Logger::Trace("testing zdotu: c = [(1.0, 2.0), (3.0, 2.0)] . [(3.0, 1.0), (4.0, 2.0)]:");
+    cblas_zdotu_sub(2, aa, 1, bb, 1, &c);
+    Logger::Trace("c = (%f, %f)", c.real(), c.imag());
+
+    Logger::Trace("Testing cblas_zgemv!");
+
+    cblas_zgemv(Layout, trans, m, n, &alpha, A, lda, rhs, incx, &beta, result, incy);
+    Logger::Trace("zgemv done");
+    for (int i = 0; i < 3; i++) {
+
+        Logger::Trace("rhs[%i]: (%f, %f), result[%i]: (%f, %f)",
+                      i, rhs[i].real(), rhs[i].imag(), i, result[i].real(), result[i].imag()
+        );
+
+    }
+}
 
 int main() {
 
@@ -104,7 +113,7 @@ int main() {
 
     double result = cblas_ddot(2, a, 1, a, 1);
     Logger::Trace("result %f", result);
-//    testLapack();
+    testLapack();
 
     return 0;
 }
