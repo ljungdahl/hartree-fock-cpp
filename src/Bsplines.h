@@ -15,7 +15,7 @@ namespace Atom {
     public:
         Bsplines(u32 numKnotPoints_, u32 bsplineOrder_);
         void setupKnotPoints(const std::vector<Complex> &gridPoints);
-        void LogKnotSequence();
+        void DebugLogKnotSequence();
         u32 numberOfBsplines();
         Complex GetBsplineAtCoordinate(Complex coordinate, u32 bsplineIndex);
 

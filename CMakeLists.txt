@@ -15,10 +15,10 @@ if (WIN32)
             ${MKL_DIR}/lib/intel64_win)
 
     set(MKL_COMPILER_DIR
-            ${MKL_WIN_PATH}/compiler)
+            ${MKL_WIN_PATH}/compiler/lib/intel64_win)
 
     set(MKL_COMPILER_REDIST_DIR
-            ${MKL_WIN_PATH}/intel64_win/compiler)
+            ${MKL_WIN_PATH}/redist/intel64_win/compiler)
 
 endif (WIN32)
 
@@ -48,10 +48,12 @@ include_directories(src)
 add_executable(${PROJECT_NAME}
         src/logger.cpp
         src/Bsplines.cpp
-        src/main.cpp
         src/Grid.cpp
         src/FileIO.cpp
-        src/testing_mkl.cpp)
+        src/testing_mkl.cpp
+        src/Matrix.cpp
+        src/GaussLegendre.cpp
+        src/main.cpp)
 
 if (UNIX)
     # Assuming we use gcc...
@@ -88,7 +90,7 @@ if (WIN32)
 
     # This shit is to link the run time library and copy the dll to the same location as the .exe binary
     # see https://stackoverflow.com/a/59594095
-    set(MKL_COMPILER_LIB ${MKL_COMPILER_DIR}/lib/intel64_win/libiomp5md.lib)
+    set(MKL_COMPILER_LIB ${MKL_COMPILER_DIR}/libiomp5md.lib)
     add_library(mkl_libiomp5md SHARED IMPORTED GLOBAL)
     set_property(TARGET mkl_libiomp5md PROPERTY IMPORTED_IMPLIB_RELEASE ${MKL_COMPILER_LIB})
     set_property(TARGET mkl_libiomp5md PROPERTY IMPORTED_LOCATION_RELEASE ${MKL_COMPILER_REDIST_DIR}/libiomp5md.dll)

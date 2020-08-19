@@ -53,7 +53,7 @@ void Atom::Bsplines::setupKnotPoints(const std::vector<Complex> &gridPoints) {
 
 }
 
-void Atom::Bsplines::LogKnotSequence() {
+void Atom::Bsplines::DebugLogKnotSequence() {
     u32 index = 0;
     for (auto point : m_knotPoints) {
         Logger::Log("Knotpoint %i: (%E, %E)", index, point.real(), point.imag());
