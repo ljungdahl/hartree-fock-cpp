@@ -3,6 +3,7 @@
 #include "Bsplines.h"
 
 
+
 Atom::Bsplines::Bsplines(u32 numKnotPoints_, u32 bsplineOrder_)
         : m_numKnotPoints(numKnotPoints_),
           m_order(bsplineOrder_),
@@ -65,7 +66,7 @@ u32 Atom::Bsplines::numberOfBsplines() {
     return m_numKnotPoints - m_order;
 }
 
-void Atom::Bsplines::bsplvb_Complex(Complex coordinate, u32 left) {
+void Atom::Bsplines::bsplvb_Complex(Complex coordinate, u32 left, u32 k_order) {
 /*
  * NOTE(anton):
  * This is a C++ version of the de Boor Fortran routine bsplvb, for Complex valued Bsplines.
@@ -92,28 +93,29 @@ void Atom::Bsplines::bsplvb_Complex(Complex coordinate, u32 left) {
     // Assume index == 1, ie starting order is j = 0;
     m_Sp[0] = Complex(1.0, 0.0);
 
-    u32 k = m_order;
+    u32 k = k_order;
     auto &t = m_knotPoints;
     auto &dR = m_bsplvb_dR;
     auto &dL = m_bsplvb_dL;
 
-    for(u32 j = 0 ; j < k-1; j+=1) {
+    for (u32 j = 0; j < k - 1; j += 1) {
 
         dR[j] = t[left + j + 1] - x;
-        dL[j] = x - t[left-j];
+        dL[j] = x - t[left - j];
         saved = Complex(0.0);
 
         for (u32 i = 0; i <= j; i++) {
-            term = m_Sp[i] / (dR[i] + dL[j-i]);
+            term = m_Sp[i] / (dR[i] + dL[j - i]);
             m_Sp[i] = saved + dR[i] * term;
-            saved = dL[j-i] * term;
+            saved = dL[j - i] * term;
         }
 
-        m_Sp[j+1] = saved;
+        m_Sp[j + 1] = saved;
 
     }
 
 }
+
 
 Complex Atom::Bsplines::GetBsplineAtCoordinate(Complex coordinate, u32 bsplineIndex) {
     //TODO(anton): How to get proper first Bspline? How to think about it?
@@ -137,9 +139,9 @@ Complex Atom::Bsplines::GetBsplineAtCoordinate(Complex coordinate, u32 bsplineIn
     // gets messy in bsplvb_Complex, so we just force it to one here.
     // In the collocation application for our usual boundary conditions this Bspline has
     // a zero coefficient anyway.
-    if(bsplineIndex == m_numBsplines-1) {
-        f64 tolerance = 1e-6;
-        if (std::abs(coordinate-m_knotPoints[m_knotPoints.size()-1]) < tolerance ) {
+    if (bsplineIndex == m_numBsplines - 1) {
+        f64 tolerance = 1e-8;
+        if (std::abs(coordinate - m_knotPoints[m_knotPoints.size() - 1]) < tolerance) {
             return Complex(1.0, 0.0);
         }
     }
@@ -155,19 +157,178 @@ Complex Atom::Bsplines::GetBsplineAtCoordinate(Complex coordinate, u32 bsplineIn
     }
 
     // The index used to get the bspline from bsplvb_Complex().
-    u32 accessIndex = bsplineIndex - left_knotPoint_index + m_order-1;
-    if(accessIndex < 0 || accessIndex > m_Sp.size()-1) {
+    u32 accessIndex = bsplineIndex - left_knotPoint_index + m_order - 1;
+    if (accessIndex < 0 || accessIndex > m_Sp.size() - 1) {
         // We're not in a bspline that is nonzero on this coordinate. So return zero.
         return Complex(0.0);
     }
 
     // Calculate non-zero Bsplines on the coordinate.
-    bsplvb_Complex(coordinate, left_knotPoint_index);
+    bsplvb_Complex(coordinate, left_knotPoint_index, m_order);
 
     // Get the correct Bspline from the k = bsplineOrder non-zero ones.
     Complex return_value = m_Sp[accessIndex];
 
     return return_value;
+}
+
+Complex Atom::Bsplines::GetBsplineAtCoordinate(Complex coordinate, u32 bsplineIndex, u32 order) {
+    //TODO(anton): How to get proper first Bspline? How to think about it?
+    /*
+     * NOTE(anton):
+     * Based on Fortran routine bget_cmplx. We get the bsplineIndex:th Bspline at x = coordinate.
+     */
+
+    auto x_real = coordinate.real();
+    auto knotPointsStart_real = m_knotPoints[0].real();
+    auto knotPointsEnd_real = m_knotPoints[m_knotPoints.size() - 1].real();
+
+    bool isCoordinateOutsideGrid = (x_real > knotPointsEnd_real || x_real < knotPointsStart_real);
+
+    ASSERT(!isCoordinateOutsideGrid);
+
+    // NOTE(anton):
+    // If we're close to the last grid point (or at the last grid point),
+    // and we're looking for the value of the last Bspline at that point,
+    // we know that the value should be 1. The indexing for this last point
+    // gets messy in bsplvb_Complex, so we just force it to one here.
+    // In the collocation application for our usual boundary conditions this Bspline has
+    // a zero coefficient anyway.
+    if (bsplineIndex == m_numBsplines - 1) {
+        f64 tolerance = 1e-8;
+        if (std::abs(coordinate - m_knotPoints[m_knotPoints.size() - 1]) < tolerance) {
+            return Complex(1.0, 0.0);
+        }
+    }
+
+
+    // Find the left knot point index left_knotPoint_index such that
+    // m_knotPoints[left_knotPoint_index].real() < coordinate.real() m_knotPoints[left_knotPoint_index+1].real()
+    u32 left_knotPoint_index = 0;
+    for (int t = 0; t < m_numKnotPoints; t++) {
+        if (x_real >= m_knotPoints[t].real()) {
+            left_knotPoint_index = t;
+        }
+    }
+
+    // The index used to get the bspline from bsplvb_Complex().
+    u32 accessIndex = bsplineIndex - left_knotPoint_index + order - 1;
+    if (accessIndex < 0 || accessIndex > m_Sp.size() - 1) {
+        // We're not in a bspline that is nonzero on this coordinate. So return zero.
+        return Complex(0.0);
+    }
+
+    // Calculate non-zero Bsplines on the coordinate.
+    bsplvb_Complex(coordinate, left_knotPoint_index, order);
+
+    // Get the correct Bspline from the k = bsplineOrder non-zero ones.
+    Complex return_value = m_Sp[accessIndex];
+
+    return return_value;
+}
+
+
+Complex Atom::Bsplines::GetDerivativeAtCoordinate(Complex coordinate, u32 bsplineIndex) {
+    Complex x = coordinate;
+    u32 i = bsplineIndex;
+    u32 k = m_order;
+    auto B_i_k_min_1 = GetBsplineAtCoordinate(x, i, k-1);
+    auto B_i_plus_1_k_min_1 = GetBsplineAtCoordinate(x, i+1, k-1);
+    Complex term1 = B_i_k_min_1/(m_knotPoints[i+k-1]-m_knotPoints[i]);
+    Complex term2 = B_i_plus_1_k_min_1/(m_knotPoints[i+k]-m_knotPoints[i+1]);
+    Complex dB = Complex((f64)(k-1))*(term1-term2);
+
+    return dB;
+}
+
+u32 Atom::Bsplines::GetKnotPointIndexFromBsplineIndex(u32 bsplineIndex) {
+    u32 t_index;
+    t_index = bsplineIndex;
+    return t_index;
+}
+
+Complex Atom::Bsplines::GetBsplineFirstDerivativeAtCoordinate(Complex coordinate, u32 bsplineIndex) {
+    auto x_real = coordinate.real();
+    auto knotPointsStart_real = m_knotPoints[0].real();
+    auto knotPointsEnd_real = m_knotPoints[m_knotPoints.size() - 1].real();
+
+    bool isCoordinateOutsideGrid = (x_real > knotPointsEnd_real || x_real < knotPointsStart_real);
+
+    ASSERT(!isCoordinateOutsideGrid);
+
+    // If we're in the last physical point we have special cases for the last
+    // two Bsplines, ie those with bsplineIndex = numBsplines-1, and numBsplines-2.
+    f64 tolerance = 1e-8;
+    if (std::abs(coordinate - m_knotPoints[m_knotPoints.size() - 1]) < tolerance) {
+
+        if (bsplineIndex == m_numBsplines - 1) {
+
+            u32 N = m_knotPoints.size();
+            Complex denominator = Complex(m_knotPoints[N - 1] - m_knotPoints[N - 2]);
+            Complex derivativeAtLastPointForLastBspline = Complex((f64) (m_order - 1)) / denominator;
+
+            return derivativeAtLastPointForLastBspline;
+
+        } else if (bsplineIndex == m_numBsplines - 2) {
+
+            u32 N = m_knotPoints.size();
+            Complex denominator = Complex(m_knotPoints[N - 1] - m_knotPoints[N - 2]);
+            Complex derivativeAtLastPointForSecondToLastBspline = -Complex((f64) (m_order - 1)) / denominator;
+
+            return derivativeAtLastPointForSecondToLastBspline;
+
+        } else {
+
+            return Complex(0.0);
+
+        }
+
+    }
+
+    // Find the left knot point index left_knotPoint_index such that
+    // m_knotPoints[left_knotPoint_index].real() < coordinate.real() m_knotPoints[left_knotPoint_index+1].real()
+    u32 left_knotPoint_index = 0;
+    for (int t = 0; t < m_numKnotPoints; t++) {
+        if (x_real >= m_knotPoints[t].real()) {
+            left_knotPoint_index = t;
+        }
+    }
+
+    u32 accessIndex = bsplineIndex - left_knotPoint_index + m_order - 1;
+    if (accessIndex < 0 || accessIndex > m_Sp.size() - 1) {
+        return Complex(0.0, 0.0);
+    }
+
+    // Get the Bsplines from bsplvb. If accessIndex = i, and m_order = k,
+    // we have the following from fortran bder comments:
+    //    *     index=left-kord+i => i=index-left+kord  for Sp with k=kord
+    //    *     index=left-kord+i+1 => i=index-left+kord-1  for Sp with k=kord-1
+    //    *     Sp(i-1,k-1) gives the same index as Sp(i,k)
+    //    *     Sp(i,k-1) gives the same index as Sp(i+1.k)
+
+    // Calculate non-zero Bsplines on the coordinate.
+    bsplvb_Complex(coordinate, left_knotPoint_index, m_order - 1);
+
+    Complex derivative = Complex(0.0);
+    if (accessIndex == 0) {
+        Complex denominator = m_knotPoints[bsplineIndex + m_order - 1] - m_knotPoints[bsplineIndex + 1];
+        Complex prefactor = -Complex((f64) (m_order - 1));
+        derivative = prefactor * m_Sp[accessIndex] / denominator;
+    } else if (accessIndex == m_order - 1) {
+        Complex denominator = m_knotPoints[bsplineIndex + m_order - 2] - m_knotPoints[bsplineIndex];
+        Complex prefactor = Complex((f64) (m_order - 1));
+        derivative = prefactor * m_Sp[accessIndex - 1] / denominator;
+    } else {
+        Complex denominator1 = m_knotPoints[bsplineIndex + m_order - 2] - m_knotPoints[bsplineIndex];
+        Complex denominator2 = m_knotPoints[bsplineIndex + m_order - 1] - m_knotPoints[bsplineIndex + 1];
+        Complex prefactor = Complex((f64) (m_order - 1));
+        derivative = prefactor * (
+                (m_Sp[accessIndex - 1] / denominator1) - (m_Sp[accessIndex] / denominator2)
+        );
+    }
+
+
+    return derivative;
 }
 
 

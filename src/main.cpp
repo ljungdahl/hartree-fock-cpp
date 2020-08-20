@@ -1,5 +1,5 @@
 #include <cstdio>
-#include <iostream>
+#include <cmath>
 
 #include "mkl.h"
 
@@ -12,7 +12,39 @@
 #include "Matrix.h"
 #include "GaussLegendre.h"
 
-void writeToFile(Atom::Bsplines *Bsplines, Atom::Grid *Grid) {
+
+//Complex NaiveBsplineAtPoint(Complex coordinate, u32 index, u32 order, std::vector<Complex> knotPts) {
+//    // Find the left knot point index left_knotPoint_index such that
+//    // m_knotPoints[left_knotPoint_index].real() < coordinate.real() m_knotPoints[left_knotPoint_index+1].real()
+//    u32 left_knotPoint_index = 0;
+//    auto x_real = coordinate.real();
+//    for (int t = 0; t < knotPts.size(); t++) {
+//        if (x_real >= knotPts[t].real()) {
+//            left_knotPoint_index = t;
+//        }
+//    }
+//    if(left_knotPoint_index != index) return Complex(0.0);
+//
+//    u32 i = index;
+//
+//    Complex B_i_k = Complex(1.0); // k = 1
+//    Complex B_i_plus_1_k = Complex(0.0); // k = 1
+//    Complex x = coordinate;
+//    for (int k = 2; k <= order; k++) {
+//        Complex t_i = knotPts[i];
+//        Complex t_i_plus_k = knotPts[i+k-1];
+//        Complex t_i_plus_k_minus_1 = knotPts[i+k-2];
+//        Complex t_i_plus_1 = knotPts[i+1];
+//
+//        Complex B_i_k_min_1 = B_i_k;
+//        Complex B_i_plus_1_k_min_1 = B_i_plus_1_k;
+//
+//        B_i_k = ((x-t_i)/(t_i_plus_k_minus_1-t_i))*B_i_k_min_1 + ((t_i_plus_k-x)/(t_i_plus_k-t_i))*B_i_plus_1_k_min_1;
+//    }
+//
+//}
+
+void writeToFile(Atom::Bsplines *Bsplines, Atom::Grid *Grid, bool isDerivative) {
     std::vector<std::vector<f64>> knotPointsOutput;
 
     for (auto knotPt : Bsplines->m_knotPoints) {
@@ -29,17 +61,30 @@ void writeToFile(Atom::Bsplines *Bsplines, Atom::Grid *Grid) {
 
         rowVector.push_back(val.real());
 
+//        for (u32 bsplineIndex = 0; bsplineIndex < Bsplines->m_numBsplines; bsplineIndex++) {
         for (u32 bsplineIndex = 0; bsplineIndex < Bsplines->m_numBsplines; bsplineIndex++) {
-            auto result = Bsplines->GetBsplineAtCoordinate(val, bsplineIndex);
+//        for (u32 bsplineIndex = Bsplines->m_numBsplines-1; bsplineIndex < Bsplines->m_numBsplines; bsplineIndex++) {
+//        for (u32 bsplineIndex = 3; bsplineIndex < 4; bsplineIndex++) {
+//        for (u32 bsplineIndex = 0; bsplineIndex < 1; bsplineIndex++) {
+            auto result = Complex(0.0);
+            if (isDerivative) {
+//                result = Bsplines->GetBsplineFirstDerivativeAtCoordinate(val, bsplineIndex);
+                result = Bsplines->GetDerivativeAtCoordinate(val, bsplineIndex);
+            } else {
+                result = Bsplines->GetBsplineAtCoordinate(val, bsplineIndex);
+            }
             rowVector.push_back(result.real());
         }
 
         outputData.push_back(rowVector);
     }
 
-    FileIO::writeRowColDataToFile(outputData, "../bsplines.dat");
+    if (isDerivative) {
+        FileIO::writeRowColDataToFile(outputData, "../bsplines_derivatives.dat");
+    } else {
+        FileIO::writeRowColDataToFile(outputData, "../bsplines.dat");
+    }
 }
-
 
 
 void testLapack() {
@@ -135,7 +180,7 @@ int main() {
     constexpr f64 gridStart = 0.0, gridEnd = 10.0;
     Atom::Grid Grid = Atom::Grid(numGridPoints, gridStart, gridEnd);
 
-    constexpr u32 bsplineOrder = 6;
+    constexpr u32 bsplineOrder = 4;
     constexpr u32 numKnotPoints = 30;
     Atom::Bsplines Bsplines = Atom::Bsplines(numKnotPoints, bsplineOrder);
     // Linear knotpoint sequence;
@@ -178,6 +223,7 @@ int main() {
     ZMatrix H = ZMatrix(matrixDimension, matrixDimension);
     H.setToZero();
 
+    // Some temporary code to test GaussLegendre quadrature.
     auto testGLQuadrature = [&](u32 points) {
         // Test Guass Legendre quadrature by integrating \int_0^1 x^2 = 1/3.
         auto a = Complex(0.0, 0.0);
@@ -189,17 +235,45 @@ int main() {
         auto pWeights = GaussLegendreIntegration.getPointerToZWeights(points);
 
         auto result = Complex(0.0, 0.0);
-        for(int i = 0; i < points; ++i) {
-            auto f = abscissae[i]*abscissae[i]; // Function is x^2.
-            result += prefactor*pWeights[i]*f;
+        for (int i = 0; i < points; ++i) {
+            auto f = abscissae[i] * abscissae[i]; // Function is x^2.
+            result += prefactor * pWeights[i] * f;
         }
 
         Logger::Trace("Result of GL integration of x^2 from a = 0, to b = 1 (should be 1/3 = 0.333333):");
         Logger::Trace("(%f, %f)", result.real(), result.imag());
+
+        result = Complex(0.0, 0.0);
+        for (int i = 0; i < points; ++i) {
+            auto f = abscissae[i] * abscissae[i]; // Function is x^2.
+            result += prefactor * pWeights[i] * f;
+        }
+
+        constexpr f64 PI = 3.141592653589793238463;
+
+        a = Complex(0.0, 0.0);
+        b = Complex(PI, 0.0);
+
+        abscissae = GaussLegendreIntegration.getShiftedAbscissae(a, b, points);
+        ASSERT(abscissae.size() == points);
+        prefactor = GaussLegendreIntegration.b_minus_a_half(a, b);
+        pWeights = GaussLegendreIntegration.getPointerToZWeights(points);
+
+        result = Complex(0.0, 0.0);
+        for (int i = 0; i < points; ++i) {
+            auto f = sin(abscissae[i]) * sin(abscissae[i]); // Function is sin(x)^2
+            result += prefactor * pWeights[i] * f;
+        }
+
+        Logger::Trace(
+                "Result of GL integration of sin(x)*sin(x) from a = 0, to b = Pi (should be pi/2 \approx 1.5708):");
+        Logger::Trace("(%f, %f)", result.real(), result.imag());
     };
+//    testGLQuadrature(bsplineOrder);
 
-    testGLQuadrature(bsplineOrder);
-
+    Logger::Trace("Testing Bspline derivatives:");
+    writeToFile(&Bsplines, &Grid, /*isDerivative:*/true);
+    writeToFile(&Bsplines, &Grid, /*isDerivative:*/false);
     auto calculate_H_matrix_element = [&](u32 i, u32 j, u32 l) {
         // We have three terms here for H B_i (r)
         // First \int dr B_j (-0.5*d_r^2) B_i. We can show that this in fact is equal to
@@ -212,8 +286,6 @@ int main() {
 
     ZMatrix B = ZMatrix(matrixDimension, matrixDimension);
     B.setToZero();
-
-
 
 
     return 0;

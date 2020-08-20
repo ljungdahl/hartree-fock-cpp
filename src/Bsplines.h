@@ -18,13 +18,17 @@ namespace Atom {
         void DebugLogKnotSequence();
         u32 numberOfBsplines();
         Complex GetBsplineAtCoordinate(Complex coordinate, u32 bsplineIndex);
+        Complex GetBsplineAtCoordinate(Complex coordinate, u32 bsplineIndex, u32 order);
+        Complex GetBsplineFirstDerivativeAtCoordinate(Complex coordinate, u32 bsplineIndex);
+        Complex GetDerivativeAtCoordinate(Complex coordinate, u32 bsplineIndex);
 
     private:
         std::vector<Complex> m_bsplvb_dL;
         std::vector<Complex> m_bsplvb_dR;
         std::vector<Complex> m_Sp;
     private:
-        void bsplvb_Complex(Complex coordinate, u32 left);
+        void bsplvb_Complex(Complex coordinate, u32 left, u32 k_order); // For derivative calculations
+        u32 GetKnotPointIndexFromBsplineIndex(u32 bsplineIndex);
     };
 
 }

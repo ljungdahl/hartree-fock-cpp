@@ -15,7 +15,7 @@ namespace LA {
                   m_cols(cols),
                   m_data(rows * cols) {
             // The std::vector<T> class has a constructor explicit vector (size_t count)
-            // which is as follows:
+            // which is as follows:ma
             // 4) Constructs the container with count default-inserted instances of T. No copies are made.
             // ref: https://en.cppreference.com/w/cpp/container/vector/vector
             std::fill(m_data.begin(), m_data.end(), T());
@@ -23,6 +23,7 @@ namespace LA {
 
         T& operator()(u32 i, u32 j);
         T operator()(u32 i, u32 j) const;
+
         void setToZero() {
             std::fill(m_data.begin(), m_data.end(), T());
         }
