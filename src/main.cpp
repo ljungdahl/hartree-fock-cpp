@@ -209,6 +209,8 @@ int main() {
     for (u32 i = 1; i <= numKnotPoints - bsplineOrder - 2; i++) {
         bsplineIndices.push_back(i);
     }
+    Logger::Trace("bsplineIndices.size(): %i, last element: %i",
+            bsplineIndices.size(), bsplineIndices[bsplineIndices.size()-1]);
 
     // We use Hartree atomic units. hbar = 1, electron charge e = 1, bohr radius a_0 = 1, electron mass m_e = 1.
     // We also have that 4\pi \epsilon_0 = 1,
@@ -220,8 +222,8 @@ int main() {
     u32 l = Atom::AngularMomentumQuantumNumber::s; // l = 0,1,2,3... <-> s,p,d,f,...
 
     // Homogeneous boundaries at r = 0, and r = infty, so we remove first and last bspline.
-    u32 matrixDimension = bsplineIndices.size() - 2;
-
+    u32 matrixDimension = bsplineIndices.size();
+    Logger::Trace("matrixDimension: %i", matrixDimension);
     ZMatrix H = ZMatrix(matrixDimension, matrixDimension);
     H.setToZero();
 
@@ -278,8 +280,8 @@ int main() {
 //    writeToFile(&Bsplines, &Grid, /*isDerivative:*/false);
 
     auto calculate_H_matrix_element = [&](u32 i, u32 j, f64 l, f64 Z) {
-        u32 bsplineIndex_j = j + 1;
-        u32 bsplineIndex_i = i + 1;
+        u32 bsplineIndex_j = bsplineIndices[j];
+        u32 bsplineIndex_i = bsplineIndices[i];
 
         Complex a = Bsplines.m_knotPoints[bsplineIndex_i];
         Complex b = Bsplines.m_knotPoints[bsplineIndex_i + Bsplines.m_order];
@@ -330,8 +332,8 @@ int main() {
     };
 
     auto calculate_B_matrix_element = [&](u32 i, u32 j) {
-        u32 bsplineIndex_j = j + 1;
-        u32 bsplineIndex_i = i + 1;
+        u32 bsplineIndex_j = bsplineIndices[j];
+        u32 bsplineIndex_i = bsplineIndices[i];
 
         if (std::abs((f64) bsplineIndex_i - (f64) bsplineIndex_j) >= (f64) Bsplines.m_order) {
             return Complex(0.0);
@@ -374,19 +376,23 @@ int main() {
     }
 //    calculate_H_matrix_element(0, 0, (f64)l, (f64)Z);
 
-
-
     LAPACK::EigenParameters eigenParams;
     eigenParams.matrixLayout = LAPACK::RowMajor;
     eigenParams.computeRightEigenvectors = true;
     eigenParams.squareMatrixOrder = matrixDimension;
 
     std::vector<Complex> eigenvalues;
+    eigenvalues.resize(matrixDimension);
     ZMatrix eigenvectorCoefficients = ZMatrix(matrixDimension, matrixDimension);
 
     LAPACK::Eigenproblems eigen = LAPACK::Eigenproblems();
     eigen.GeneralisedComplexSolver(eigenParams, H, B, eigenvalues, eigenvectorCoefficients);
 
-
+    u32 valIdx = 0;
+    for (auto val : eigenvalues) {
+        Logger::Trace("output eigenvalue %i: (%f, %f)",
+                      valIdx, val.real(), val.imag());
+        valIdx++;
+    }
     return 0;
 }
