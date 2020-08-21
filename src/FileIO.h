@@ -6,4 +6,6 @@
 
 namespace FileIO {
     void writeRowColDataToFile(std::vector<std::vector<f64>> out, std::string fileName);
+
+    void writeColDataToFile(std::vector<f64> out, std::string fileName);
 }

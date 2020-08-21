@@ -19,3 +19,18 @@ void FileIO::writeRowColDataToFile(std::vector<std::vector<f64>> out, std::strin
     fclose(pFile);
     Logger::Log("wrote %s to disk.", fileName.c_str());
 }
+
+void FileIO::writeColDataToFile(std::vector<f64> out, std::string fileName) {
+    FILE *pFile;
+    pFile = fopen(fileName.c_str(), "w");
+
+    u32 numCols = out.size();
+
+
+    for (u32 j = 0; j < numCols; j++) {
+        f64 value = out[j];
+        fprintf(pFile, "%E\n", value);
+    }
+    fclose(pFile);
+    Logger::Log("wrote %s to disk.", fileName.c_str());
+}

@@ -20,14 +20,44 @@ namespace LA {
             // ref: https://en.cppreference.com/w/cpp/container/vector/vector
             std::fill(m_data.begin(), m_data.end(), T());
         }
-
-        T& operator()(u32 i, u32 j);
-        T operator()(u32 i, u32 j) const;
+//
+//        T& operator()(u32 i, u32 j);
+//        T operator()(u32 i, u32 j) const;
 
         void setToZero() {
             std::fill(m_data.begin(), m_data.end(), T());
         }
 
+
+
+        T &operator()(u32 i, u32 j) {
+            u32 accessIndex = i * m_cols + j;
+            ASSERT(accessIndex < m_data.size());
+            return m_data[accessIndex];
+        }
+
+
+        T operator()(u32 i, u32 j) const {
+            u32 accessIndex = i * m_cols + j;
+            ASSERT(accessIndex < m_data.size());
+            return m_data[accessIndex];
+        }
+
+        void set(u32 i, u32 j, T value) {
+            u32 accessIndex = i * m_cols + j;
+            ASSERT(accessIndex < m_data.size());
+            m_data[accessIndex] = value;
+        }
+
+        T* GetDataPtr() {
+            return m_data.data();
+        }
+
+        void Copy(const T* data) {
+            for (int i = 0; i < m_data.size(); i++) {
+                m_data[i] = data[i];
+            }
+        }
     private:
     u32 m_rows, m_cols;
     std::vector<T> m_data;

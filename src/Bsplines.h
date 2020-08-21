@@ -28,7 +28,6 @@ namespace Atom {
         std::vector<Complex> m_Sp;
     private:
         void bsplvb_Complex(Complex coordinate, u32 left, u32 k_order); // For derivative calculations
-        u32 GetKnotPointIndexFromBsplineIndex(u32 bsplineIndex);
     };
 
 }

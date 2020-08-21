@@ -1,3 +1,4 @@
+#include <iostream>
 #include <cstdio>
 #include <cmath>
 
@@ -180,8 +181,8 @@ int main() {
     constexpr f64 gridStart = 0.0, gridEnd = 10.0;
     Atom::Grid Grid = Atom::Grid(numGridPoints, gridStart, gridEnd);
 
-    constexpr u32 bsplineOrder = 4;
-    constexpr u32 numKnotPoints = 30;
+    constexpr u32 bsplineOrder = 6;
+    constexpr u32 numKnotPoints = 100;
     Atom::Bsplines Bsplines = Atom::Bsplines(numKnotPoints, bsplineOrder);
     // Linear knotpoint sequence;
     Bsplines.setupKnotPoints(Grid.getGridPoints());
@@ -218,7 +219,8 @@ int main() {
 
     u32 l = Atom::AngularMomentumQuantumNumber::s; // l = 0,1,2,3... <-> s,p,d,f,...
 
-    u32 matrixDimension = bsplineIndices.size();
+    // Homogeneous boundaries at r = 0, and r = infty, so we remove first and last bspline.
+    u32 matrixDimension = bsplineIndices.size() - 2;
 
     ZMatrix H = ZMatrix(matrixDimension, matrixDimension);
     H.setToZero();
@@ -271,22 +273,195 @@ int main() {
     };
 //    testGLQuadrature(bsplineOrder);
 
-    Logger::Trace("Testing Bspline derivatives:");
-    writeToFile(&Bsplines, &Grid, /*isDerivative:*/true);
-    writeToFile(&Bsplines, &Grid, /*isDerivative:*/false);
-    auto calculate_H_matrix_element = [&](u32 i, u32 j, u32 l) {
+//    Logger::Trace("Testing Bspline derivatives:");
+//    writeToFile(&Bsplines, &Grid, /*isDerivative:*/true);
+//    writeToFile(&Bsplines, &Grid, /*isDerivative:*/false);
+
+    auto calculate_H_matrix_element = [&](u32 i, u32 j, f64 l, f64 Z) {
+        u32 bsplineIndex_j = j + 1;
+        u32 bsplineIndex_i = i + 1;
+
+        Complex a = Bsplines.m_knotPoints[bsplineIndex_i];
+        Complex b = Bsplines.m_knotPoints[bsplineIndex_i + Bsplines.m_order];
+
+        u32 points = Bsplines.m_order;
+        auto abscissae = GaussLegendreIntegration.getShiftedAbscissae(a, b, points);
+        ASSERT(abscissae.size() == points);
+        auto prefactor = GaussLegendreIntegration.b_minus_a_half(a, b);
+        auto pWeights = GaussLegendreIntegration.getPointerToZWeights(points);
+
         // We have three terms here for H B_i (r)
         // First \int dr B_j (-0.5*d_r^2) B_i. We can show that this in fact is equal to
-        // \int dr dB_j/dr dB_i/dr.
+        // 0.5\int dr dB_j/dr dB_i/dr.
         // Integrals are perfomed using gaussian quadrature.
+        auto term1 = Complex(0.0, 0.0);
+        for (int m = 0; m < points; ++m) {
+            Complex dB_i = Bsplines.GetDerivativeAtCoordinate(abscissae[m], bsplineIndex_i);
+            Complex dB_j = Bsplines.GetDerivativeAtCoordinate(abscissae[m], bsplineIndex_j);
+            auto f = dB_j * dB_i;
+            term1 += prefactor * pWeights[m] * f;
+        }
+        term1 = term1 * 0.5;
 
-        Complex return_value = Complex(0.0);
+        // term2: \int B_j l(l+1)/r^2 B_i dr
+        auto term2 = Complex(0.0, 0.0);
+        for (int m = 0; m < points; ++m) {
+            Complex B_i = Bsplines.GetBsplineAtCoordinate(abscissae[m], bsplineIndex_i);
+            Complex B_j = Bsplines.GetBsplineAtCoordinate(abscissae[m], bsplineIndex_j);
+            Complex r2 = abscissae[m] * abscissae[m];
+            auto f = B_j * B_i / r2;
+            term2 += prefactor * pWeights[m] * f;
+        }
+        term2 = term2 * l * (l + 1.0);
+
+        // term3: \int B_j Z/r
+        auto term3 = Complex(0.0, 0.0);
+        for (int m = 0; m < points; ++m) {
+            Complex B_i = Bsplines.GetBsplineAtCoordinate(abscissae[m], bsplineIndex_i);
+            Complex B_j = Bsplines.GetBsplineAtCoordinate(abscissae[m], bsplineIndex_j);
+            Complex r = abscissae[m];
+            auto f = B_j * B_i / r;
+            term3 += prefactor * pWeights[m] * f;
+        }
+        term3 = term3 * Z;
+
+        Complex return_value = term1 + term2 + term3;
+        return return_value;
+    };
+
+    auto calculate_B_matrix_element = [&](u32 i, u32 j) {
+        u32 bsplineIndex_j = j + 1;
+        u32 bsplineIndex_i = i + 1;
+
+        if (std::abs((f64) bsplineIndex_i - (f64) bsplineIndex_j) >= (f64) Bsplines.m_order) {
+            return Complex(0.0);
+        }
+
+        Complex a = Bsplines.m_knotPoints[bsplineIndex_i];
+        Complex b = Bsplines.m_knotPoints[bsplineIndex_i + Bsplines.m_order];
+
+        u32 points = Bsplines.m_order;
+        auto abscissae = GaussLegendreIntegration.getShiftedAbscissae(a, b, points);
+        ASSERT(abscissae.size() == points);
+        auto prefactor = GaussLegendreIntegration.b_minus_a_half(a, b);
+        auto pWeights = GaussLegendreIntegration.getPointerToZWeights(points);
+
+        auto term1 = Complex(0.0, 0.0);
+        for (int m = 0; m < points; ++m) {
+            Complex B_i = Bsplines.GetBsplineAtCoordinate(abscissae[m], bsplineIndex_i);
+            Complex B_j = Bsplines.GetBsplineAtCoordinate(abscissae[m], bsplineIndex_j);
+            auto f = B_j * B_i;
+            term1 += prefactor * pWeights[m] * f;
+        }
+        term1 = term1 * 0.5;
+
+        Complex return_value = term1;
         return return_value;
     };
 
     ZMatrix B = ZMatrix(matrixDimension, matrixDimension);
     B.setToZero();
 
+
+    for (int i = 0; i < matrixDimension; i++) {
+        for (int j = 0; j < matrixDimension; j++) {
+
+            H(i, j) = calculate_H_matrix_element(i, j, l, Z);
+            B(i, j) = calculate_B_matrix_element(i, j);
+//            std::cout << H(i,j) << " ";
+        }
+//        std::cout << std::endl;
+    }
+//    calculate_H_matrix_element(0, 0, (f64)l, (f64)Z);
+
+// Solve generalized eigenvalue problem.
+
+    auto solve_eigenvalue_problem = [&](ZMatrix &A, ZMatrix &B, u32 dimension, std::vector<Complex> &eigvals,
+                                        ZMatrix &coeffs) {
+        std::vector<MKL_Complex16> A2;
+        A2.resize(dimension * dimension);
+
+        std::vector<MKL_Complex16> B2;
+        B2.resize(dimension * dimension);
+
+        for (int i = 0; i < dimension; i++) {
+            for (int j = 0; j < dimension; j++) {
+                MKL_Complex16 val;
+
+                val.real = A(i, j).real();
+                val.imag = A(i, j).imag();
+                A2[i + dimension * j] = val;
+
+                val.real = B(i, j).real();
+                val.imag = B(i, j).imag();
+                B2[i + dimension * j] = val;
+            }
+        }
+
+        std::vector<MKL_Complex16> alpha;
+        alpha.resize(dimension);
+
+        std::vector<MKL_Complex16> beta;
+        beta.resize(dimension);
+
+        std::vector<MKL_Complex16> LeftEigVecs;
+        LeftEigVecs.resize(dimension * dimension);
+
+        std::vector<MKL_Complex16> RightEigVecs;
+        RightEigVecs.resize(dimension * dimension);
+
+        u32 n = dimension;
+        u32 lda = n, ldb = n, ldvl = n, ldvr = n;
+        u32 info;
+
+        auto res = LAPACKE_zggev(LAPACK_ROW_MAJOR, 'N', 'V', n,
+                                 A2.data(), lda, B2.data(), ldb,
+                                 alpha.data(), beta.data(),
+                                 LeftEigVecs.data(), ldvl,
+                                 RightEigVecs.data(), ldvr);
+
+        Logger::Trace("LAPACKE_zggev res: %i", res);
+
+        for (int j = 0; j < n; j++) {
+            Complex aa = Complex(alpha[j].real, alpha[j].imag);
+            Complex bb = Complex(beta[j].real, beta[j].imag);
+            if (bb.real() < 1e-8) {
+                eigvals.push_back(Complex(0.0));
+            } else {
+                eigvals.push_back(aa / bb);
+            }
+        }
+
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < n; j++) {
+                coeffs(i, j) = Complex(RightEigVecs[i + n * j].real, RightEigVecs[i + n * j].imag);
+            }
+        }
+
+    };
+
+    std::vector<Complex> eigenvalues;
+    ZMatrix eigenvector_coeffs = ZMatrix(matrixDimension, matrixDimension);
+
+    f64 eV_per_Hartree = 27.2114;
+    solve_eigenvalue_problem(H, B, matrixDimension, eigenvalues, eigenvector_coeffs);
+//    for (auto eigenvalue : eigenvalues) {
+////        Logger::Trace("(%f, %f)", eigenvalue.real()*eV_per_Hartree, eigenvalue.imag()*eV_per_Hartree);
+//    }
+    u32 groundStateIdx = eigenvalues.size() - 1;
+
+    // Create output function.
+    std::vector<f64> outputFunction;
+    for (auto val : Grid.getGridPoints()) {
+        auto result = Complex(0.0);
+        for (u32 i = 0; i < matrixDimension; i++) {
+            u32 bsplineIndex = i+1;
+            result += eigenvector_coeffs(groundStateIdx, i)*Bsplines.GetBsplineAtCoordinate(val, bsplineIndex);
+        }
+        outputFunction.push_back(result.real());
+    }
+
+    FileIO::writeColDataToFile(outputFunction, "../radialfunction.dat");
 
     return 0;
 }

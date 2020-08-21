@@ -232,19 +232,13 @@ Complex Atom::Bsplines::GetDerivativeAtCoordinate(Complex coordinate, u32 bsplin
     Complex x = coordinate;
     u32 i = bsplineIndex;
     u32 k = m_order;
-    auto B_i_k_min_1 = GetBsplineAtCoordinate(x, i, k-1);
-    auto B_i_plus_1_k_min_1 = GetBsplineAtCoordinate(x, i+1, k-1);
-    Complex term1 = B_i_k_min_1/(m_knotPoints[i+k-1]-m_knotPoints[i]);
-    Complex term2 = B_i_plus_1_k_min_1/(m_knotPoints[i+k]-m_knotPoints[i+1]);
-    Complex dB = Complex((f64)(k-1))*(term1-term2);
+    auto B_i_k_min_1 = GetBsplineAtCoordinate(x, i, k - 1);
+    auto B_i_plus_1_k_min_1 = GetBsplineAtCoordinate(x, i + 1, k - 1);
+    Complex term1 = B_i_k_min_1 / (m_knotPoints[i + k - 1] - m_knotPoints[i]);
+    Complex term2 = B_i_plus_1_k_min_1 / (m_knotPoints[i + k] - m_knotPoints[i + 1]);
+    Complex dB = Complex((f64) (k - 1)) * (term1 - term2);
 
     return dB;
-}
-
-u32 Atom::Bsplines::GetKnotPointIndexFromBsplineIndex(u32 bsplineIndex) {
-    u32 t_index;
-    t_index = bsplineIndex;
-    return t_index;
 }
 
 Complex Atom::Bsplines::GetBsplineFirstDerivativeAtCoordinate(Complex coordinate, u32 bsplineIndex) {
