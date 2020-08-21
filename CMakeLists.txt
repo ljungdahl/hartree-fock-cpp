@@ -53,7 +53,7 @@ add_executable(${PROJECT_NAME}
         src/testing_mkl.cpp
         src/Matrix.cpp
         src/GaussLegendre.cpp
-        src/main.cpp)
+        src/main.cpp src/Eigenproblems.cpp src/Eigenproblems.h)
 
 if (UNIX)
     # Assuming we use gcc...

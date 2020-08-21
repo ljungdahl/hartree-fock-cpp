@@ -12,7 +12,7 @@
 #include "Bsplines.h"
 #include "Matrix.h"
 #include "GaussLegendre.h"
-
+#include "Eigenproblems.h"
 
 //Complex NaiveBsplineAtPoint(Complex coordinate, u32 index, u32 order, std::vector<Complex> knotPts) {
 //    // Find the left knot point index left_knotPoint_index such that
@@ -182,7 +182,7 @@ int main() {
     Atom::Grid Grid = Atom::Grid(numGridPoints, gridStart, gridEnd);
 
     constexpr u32 bsplineOrder = 6;
-    constexpr u32 numKnotPoints = 100;
+    constexpr u32 numKnotPoints = 20;
     Atom::Bsplines Bsplines = Atom::Bsplines(numKnotPoints, bsplineOrder);
     // Linear knotpoint sequence;
     Bsplines.setupKnotPoints(Grid.getGridPoints());
@@ -374,94 +374,19 @@ int main() {
     }
 //    calculate_H_matrix_element(0, 0, (f64)l, (f64)Z);
 
-// Solve generalized eigenvalue problem.
 
-    auto solve_eigenvalue_problem = [&](ZMatrix &A, ZMatrix &B, u32 dimension, std::vector<Complex> &eigvals,
-                                        ZMatrix &coeffs) {
-        std::vector<MKL_Complex16> A2;
-        A2.resize(dimension * dimension);
 
-        std::vector<MKL_Complex16> B2;
-        B2.resize(dimension * dimension);
-
-        for (int i = 0; i < dimension; i++) {
-            for (int j = 0; j < dimension; j++) {
-                MKL_Complex16 val;
-
-                val.real = A(i, j).real();
-                val.imag = A(i, j).imag();
-                A2[i + dimension * j] = val;
-
-                val.real = B(i, j).real();
-                val.imag = B(i, j).imag();
-                B2[i + dimension * j] = val;
-            }
-        }
-
-        std::vector<MKL_Complex16> alpha;
-        alpha.resize(dimension);
-
-        std::vector<MKL_Complex16> beta;
-        beta.resize(dimension);
-
-        std::vector<MKL_Complex16> LeftEigVecs;
-        LeftEigVecs.resize(dimension * dimension);
-
-        std::vector<MKL_Complex16> RightEigVecs;
-        RightEigVecs.resize(dimension * dimension);
-
-        u32 n = dimension;
-        u32 lda = n, ldb = n, ldvl = n, ldvr = n;
-        u32 info;
-
-        auto res = LAPACKE_zggev(LAPACK_ROW_MAJOR, 'N', 'V', n,
-                                 A2.data(), lda, B2.data(), ldb,
-                                 alpha.data(), beta.data(),
-                                 LeftEigVecs.data(), ldvl,
-                                 RightEigVecs.data(), ldvr);
-
-        Logger::Trace("LAPACKE_zggev res: %i", res);
-
-        for (int j = 0; j < n; j++) {
-            Complex aa = Complex(alpha[j].real, alpha[j].imag);
-            Complex bb = Complex(beta[j].real, beta[j].imag);
-            if (bb.real() < 1e-8) {
-                eigvals.push_back(Complex(0.0));
-            } else {
-                eigvals.push_back(aa / bb);
-            }
-        }
-
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < n; j++) {
-                coeffs(i, j) = Complex(RightEigVecs[i + n * j].real, RightEigVecs[i + n * j].imag);
-            }
-        }
-
-    };
+    LAPACK::EigenParameters eigenParams;
+    eigenParams.matrixLayout = LAPACK::RowMajor;
+    eigenParams.computeRightEigenvectors = true;
+    eigenParams.squareMatrixOrder = matrixDimension;
 
     std::vector<Complex> eigenvalues;
-    ZMatrix eigenvector_coeffs = ZMatrix(matrixDimension, matrixDimension);
+    ZMatrix eigenvectorCoefficients = ZMatrix(matrixDimension, matrixDimension);
 
-    f64 eV_per_Hartree = 27.2114;
-    solve_eigenvalue_problem(H, B, matrixDimension, eigenvalues, eigenvector_coeffs);
-//    for (auto eigenvalue : eigenvalues) {
-////        Logger::Trace("(%f, %f)", eigenvalue.real()*eV_per_Hartree, eigenvalue.imag()*eV_per_Hartree);
-//    }
-    u32 groundStateIdx = eigenvalues.size() - 1;
+    LAPACK::Eigenproblems eigen = LAPACK::Eigenproblems();
+    eigen.GeneralisedComplexSolver(eigenParams, H, B, eigenvalues, eigenvectorCoefficients);
 
-    // Create output function.
-    std::vector<f64> outputFunction;
-    for (auto val : Grid.getGridPoints()) {
-        auto result = Complex(0.0);
-        for (u32 i = 0; i < matrixDimension; i++) {
-            u32 bsplineIndex = i+1;
-            result += eigenvector_coeffs(groundStateIdx, i)*Bsplines.GetBsplineAtCoordinate(val, bsplineIndex);
-        }
-        outputFunction.push_back(result.real());
-    }
-
-    FileIO::writeColDataToFile(outputFunction, "../radialfunction.dat");
 
     return 0;
 }

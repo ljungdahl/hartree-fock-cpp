@@ -1,8 +1,10 @@
 #pragma once
+
 #include <vector>
 
 #include "typedefs.h"
 #include "logger.h"
+#include "custom_asserts.h"
 
 namespace LA {
 
@@ -29,13 +31,11 @@ namespace LA {
         }
 
 
-
         T &operator()(u32 i, u32 j) {
             u32 accessIndex = i * m_cols + j;
             ASSERT(accessIndex < m_data.size());
             return m_data[accessIndex];
         }
-
 
         T operator()(u32 i, u32 j) const {
             u32 accessIndex = i * m_cols + j;
@@ -49,18 +49,30 @@ namespace LA {
             m_data[accessIndex] = value;
         }
 
-        T* GetDataPtr() {
+        T *GetDataPtr() {
             return m_data.data();
         }
 
-        void Copy(const T* data) {
-            for (int i = 0; i < m_data.size(); i++) {
-                m_data[i] = data[i];
-            }
+        void copyToVector(std::vector<T>& result) const {
+            ASSERT(result.size() == m_data.size());
+            result = m_data;
         }
+
+        u32 TotalSize() const {
+            return m_rows*m_cols;
+        }
+
+        u32 numRows() const {
+            return m_rows;
+        }
+
+        u32 numCols() const {
+            return m_cols;
+        }
+
     private:
-    u32 m_rows, m_cols;
-    std::vector<T> m_data;
+        u32 m_rows, m_cols;
+        std::vector<T> m_data;
 
     private:
     };
