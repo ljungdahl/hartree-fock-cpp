@@ -100,13 +100,6 @@ void LAPACK::Eigenproblems::GeneralisedComplexSolver(LAPACK::EigenParameters par
         eigenvalues.push_back(unsorted_eigenvalues[i]);
     }
 
-    u32 valIdx = 0;
-    for (auto val : eigenvalues) {
-        Logger::Trace("Eigenvalue %i: (%f, %f), old index: %i",
-                valIdx, val.real(), val.imag(), old_indices[valIdx]);
-        valIdx++;
-    }
-
     if(eigenvalues.size() == out_eigenvalues.size()) {
         out_eigenvalues = eigenvalues;
     } else {

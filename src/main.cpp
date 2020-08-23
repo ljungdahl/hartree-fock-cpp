@@ -14,153 +14,6 @@
 #include "GaussLegendre.h"
 #include "Eigenproblems.h"
 
-//Complex NaiveBsplineAtPoint(Complex coordinate, u32 index, u32 order, std::vector<Complex> knotPts) {
-//    // Find the left knot point index left_knotPoint_index such that
-//    // m_knotPoints[left_knotPoint_index].real() < coordinate.real() m_knotPoints[left_knotPoint_index+1].real()
-//    u32 left_knotPoint_index = 0;
-//    auto x_real = coordinate.real();
-//    for (int t = 0; t < knotPts.size(); t++) {
-//        if (x_real >= knotPts[t].real()) {
-//            left_knotPoint_index = t;
-//        }
-//    }
-//    if(left_knotPoint_index != index) return Complex(0.0);
-//
-//    u32 i = index;
-//
-//    Complex B_i_k = Complex(1.0); // k = 1
-//    Complex B_i_plus_1_k = Complex(0.0); // k = 1
-//    Complex x = coordinate;
-//    for (int k = 2; k <= order; k++) {
-//        Complex t_i = knotPts[i];
-//        Complex t_i_plus_k = knotPts[i+k-1];
-//        Complex t_i_plus_k_minus_1 = knotPts[i+k-2];
-//        Complex t_i_plus_1 = knotPts[i+1];
-//
-//        Complex B_i_k_min_1 = B_i_k;
-//        Complex B_i_plus_1_k_min_1 = B_i_plus_1_k;
-//
-//        B_i_k = ((x-t_i)/(t_i_plus_k_minus_1-t_i))*B_i_k_min_1 + ((t_i_plus_k-x)/(t_i_plus_k-t_i))*B_i_plus_1_k_min_1;
-//    }
-//
-//}
-
-void writeToFile(Atom::Bsplines *Bsplines, Atom::Grid *Grid, bool isDerivative) {
-    std::vector<std::vector<f64>> knotPointsOutput;
-
-    for (auto knotPt : Bsplines->m_knotPoints) {
-        std::vector<f64> row;
-        row.push_back(knotPt.real());
-        knotPointsOutput.push_back(row);
-    }
-
-    FileIO::writeRowColDataToFile(knotPointsOutput, "../knotpoints.dat");
-
-    std::vector<std::vector<f64>> outputData;
-    for (auto val : Grid->getGridPoints()) {
-        std::vector<f64> rowVector;
-
-        rowVector.push_back(val.real());
-
-//        for (u32 bsplineIndex = 0; bsplineIndex < Bsplines->m_numBsplines; bsplineIndex++) {
-        for (u32 bsplineIndex = 0; bsplineIndex < Bsplines->m_numBsplines; bsplineIndex++) {
-//        for (u32 bsplineIndex = Bsplines->m_numBsplines-1; bsplineIndex < Bsplines->m_numBsplines; bsplineIndex++) {
-//        for (u32 bsplineIndex = 3; bsplineIndex < 4; bsplineIndex++) {
-//        for (u32 bsplineIndex = 0; bsplineIndex < 1; bsplineIndex++) {
-            auto result = Complex(0.0);
-            if (isDerivative) {
-//                result = Bsplines->GetBsplineFirstDerivativeAtCoordinate(val, bsplineIndex);
-                result = Bsplines->GetDerivativeAtCoordinate(val, bsplineIndex);
-            } else {
-                result = Bsplines->GetBsplineAtCoordinate(val, bsplineIndex);
-            }
-            rowVector.push_back(result.real());
-        }
-
-        outputData.push_back(rowVector);
-    }
-
-    if (isDerivative) {
-        FileIO::writeRowColDataToFile(outputData, "../bsplines_derivatives.dat");
-    } else {
-        FileIO::writeRowColDataToFile(outputData, "../bsplines.dat");
-    }
-}
-
-
-void testLapack() {
-    Logger::Trace("Entered testLapack()");
-
-    Logger::Trace("Testing CBLAS zgemv y = A*x");
-
-    Complex rhs[3] = {Complex(1.0), Complex(2.0), Complex(3.0)};
-    Complex A[3][3];
-    for (int i = 0; i < 1; i++) {
-        A[i][i] = Complex(2.0, 0.0);
-    }
-    A[0][1] = Complex(1.0, 0.0);
-    A[1][1] = Complex(2.0, 0.0);
-    A[2][2] = Complex(3.0, 1.0);
-
-    CBLAS_LAYOUT Layout = CblasRowMajor;
-    CBLAS_TRANSPOSE trans = CblasNoTrans;
-
-    MKL_INT m = 3, n = m;
-    Complex alpha = Complex(1.0, 0.0);
-    Complex beta = Complex(0.0, 0.0);
-    MKL_INT lda = n, incy = 1, incx = 1;
-
-    Complex result[3] = {Complex(1.0)};
-
-    Complex aa[2] = {Complex(1.0, 2.0), Complex(3.0, 2.0)};
-    Complex bb[2] = {Complex(3.0, 1.0), Complex(4.0, 2.0)};
-    Complex c;
-
-    Logger::Trace("testing zdotu: c = [(1.0, 2.0), (3.0, 2.0)] . [(3.0, 1.0), (4.0, 2.0)]:");
-    cblas_zdotu_sub(2, aa, 1, bb, 1, &c);
-    Logger::Trace("c = (%f, %f)", c.real(), c.imag());
-
-    Logger::Trace("Testing cblas_zgemv!");
-
-    cblas_zgemv(Layout, trans, m, n, &alpha, A, lda, rhs, incx, &beta, result, incy);
-    Logger::Trace("zgemv done");
-    for (int i = 0; i < 3; i++) {
-
-        Logger::Trace("rhs[%i]: (%f, %f), result[%i]: (%f, %f)",
-                      i, rhs[i].real(), rhs[i].imag(), i, result[i].real(), result[i].imag()
-        );
-
-    }
-}
-
-void MKL_Test() {
-    Logger::Trace("Entered MKL_Test()");
-
-    MKLVersion ver;
-    int len = 198;
-    char buf[198];
-
-    MKL_Get_Version_String(buf, len);
-    printf("\n%s\n", buf);
-    printf("\n");
-
-    MKL_Get_Version(&ver);
-    printf("Major version:          %d\n", ver.MajorVersion);
-    printf("Minor version:          %d\n", ver.MinorVersion);
-    printf("Update version:         %d\n", ver.UpdateVersion);
-    printf("Product status:         %s\n", ver.ProductStatus);
-    printf("Build:                  %s\n", ver.Build);
-    printf("Processor optimization: %s\n", ver.Processor);
-    printf("================================================================\n");
-    printf("\n");
-
-    double a[2] = {1.0, 2.0};
-
-    double result = cblas_ddot(2, a, 1, a, 1);
-    Logger::Trace("result %f", result);
-    testLapack();
-}
-
 namespace Atom {
     enum AngularMomentumQuantumNumber {
         s = 0,
@@ -173,6 +26,25 @@ namespace Atom {
 
 typedef LA::Matrix<Complex> ZMatrix;
 
+void writeKnotPointsToFile(const std::vector<Complex> &knotPts) {
+    std::vector<f64> output;
+    for (auto point : knotPts) {
+        output.push_back(point.real());
+    }
+
+    FileIO::writeColDataToFile(output, "../knotpoints.dat");
+}
+
+void writeGridToFile(const std::vector<Complex> &grid) {
+    std::vector<f64> output;
+    for (auto point : grid) {
+        output.push_back(point.real());
+    }
+
+    FileIO::writeColDataToFile(output, "../grid.dat");
+}
+
+
 int main() {
 //    MKL_Test();
 
@@ -180,12 +52,15 @@ int main() {
     constexpr u32 numGridPoints = 1000;
     constexpr f64 gridStart = 0.0, gridEnd = 10.0;
     Atom::Grid Grid = Atom::Grid(numGridPoints, gridStart, gridEnd);
+    writeGridToFile(Grid.getGridPoints());
 
     constexpr u32 bsplineOrder = 6;
-    constexpr u32 numKnotPoints = 20;
+    constexpr u32 numKnotPoints = 80;
     Atom::Bsplines Bsplines = Atom::Bsplines(numKnotPoints, bsplineOrder);
-    // Linear knotpoint sequence;
-    Bsplines.setupKnotPoints(Grid.getGridPoints());
+
+    Bsplines.setupKnotPoints(Grid.getGridPoints(), Atom::knotSequenceType::firstPointsCloserThenLinear);
+    writeKnotPointsToFile(Bsplines.m_knotPoints);
+
 
     GaussLegendre::Integration GaussLegendreIntegration = GaussLegendre::Integration();
 
@@ -227,58 +102,6 @@ int main() {
     ZMatrix H = ZMatrix(matrixDimension, matrixDimension);
     H.setToZero();
 
-    // Some temporary code to test GaussLegendre quadrature.
-    auto testGLQuadrature = [&](u32 points) {
-        // Test Guass Legendre quadrature by integrating \int_0^1 x^2 = 1/3.
-        auto a = Complex(0.0, 0.0);
-        auto b = Complex(1.0, 0.0);
-
-        auto abscissae = GaussLegendreIntegration.getShiftedAbscissae(a, b, points);
-        ASSERT(abscissae.size() == points);
-        auto prefactor = GaussLegendreIntegration.b_minus_a_half(a, b);
-        auto pWeights = GaussLegendreIntegration.getPointerToZWeights(points);
-
-        auto result = Complex(0.0, 0.0);
-        for (int i = 0; i < points; ++i) {
-            auto f = abscissae[i] * abscissae[i]; // Function is x^2.
-            result += prefactor * pWeights[i] * f;
-        }
-
-        Logger::Trace("Result of GL integration of x^2 from a = 0, to b = 1 (should be 1/3 = 0.333333):");
-        Logger::Trace("(%f, %f)", result.real(), result.imag());
-
-        result = Complex(0.0, 0.0);
-        for (int i = 0; i < points; ++i) {
-            auto f = abscissae[i] * abscissae[i]; // Function is x^2.
-            result += prefactor * pWeights[i] * f;
-        }
-
-        constexpr f64 PI = 3.141592653589793238463;
-
-        a = Complex(0.0, 0.0);
-        b = Complex(PI, 0.0);
-
-        abscissae = GaussLegendreIntegration.getShiftedAbscissae(a, b, points);
-        ASSERT(abscissae.size() == points);
-        prefactor = GaussLegendreIntegration.b_minus_a_half(a, b);
-        pWeights = GaussLegendreIntegration.getPointerToZWeights(points);
-
-        result = Complex(0.0, 0.0);
-        for (int i = 0; i < points; ++i) {
-            auto f = sin(abscissae[i]) * sin(abscissae[i]); // Function is sin(x)^2
-            result += prefactor * pWeights[i] * f;
-        }
-
-        Logger::Trace(
-                "Result of GL integration of sin(x)*sin(x) from a = 0, to b = Pi (should be pi/2 \approx 1.5708):");
-        Logger::Trace("(%f, %f)", result.real(), result.imag());
-    };
-//    testGLQuadrature(bsplineOrder);
-
-//    Logger::Trace("Testing Bspline derivatives:");
-//    writeToFile(&Bsplines, &Grid, /*isDerivative:*/true);
-//    writeToFile(&Bsplines, &Grid, /*isDerivative:*/false);
-
     auto calculate_H_matrix_element = [&](u32 i, u32 j, f64 l, f64 Z) {
         u32 bsplineIndex_j = bsplineIndices[j];
         u32 bsplineIndex_i = bsplineIndices[i];
@@ -303,7 +126,6 @@ int main() {
             auto f = dB_j * dB_i;
             term1 += prefactor * pWeights[m] * f;
         }
-        term1 = term1 * 0.5;
 
         // term2: \int B_j l(l+1)/r^2 B_i dr
         auto term2 = Complex(0.0, 0.0);
@@ -314,7 +136,6 @@ int main() {
             auto f = B_j * B_i / r2;
             term2 += prefactor * pWeights[m] * f;
         }
-        term2 = term2 * l * (l + 1.0);
 
         // term3: \int B_j Z/r
         auto term3 = Complex(0.0, 0.0);
@@ -325,9 +146,8 @@ int main() {
             auto f = B_j * B_i / r;
             term3 += prefactor * pWeights[m] * f;
         }
-        term3 = term3 * Z;
 
-        Complex return_value = term1 + term2 + term3;
+        Complex return_value = 0.5*term1 + (0.5*l*(l+1))*term2 - Z*term3;
         return return_value;
     };
 
@@ -355,7 +175,6 @@ int main() {
             auto f = B_j * B_i;
             term1 += prefactor * pWeights[m] * f;
         }
-        term1 = term1 * 0.5;
 
         Complex return_value = term1;
         return return_value;
@@ -364,17 +183,12 @@ int main() {
     ZMatrix B = ZMatrix(matrixDimension, matrixDimension);
     B.setToZero();
 
-
     for (int i = 0; i < matrixDimension; i++) {
         for (int j = 0; j < matrixDimension; j++) {
-
             H(i, j) = calculate_H_matrix_element(i, j, l, Z);
             B(i, j) = calculate_B_matrix_element(i, j);
-//            std::cout << H(i,j) << " ";
         }
-//        std::cout << std::endl;
     }
-//    calculate_H_matrix_element(0, 0, (f64)l, (f64)Z);
 
     LAPACK::EigenParameters eigenParams;
     eigenParams.matrixLayout = LAPACK::RowMajor;
@@ -388,11 +202,22 @@ int main() {
     LAPACK::Eigenproblems eigen = LAPACK::Eigenproblems();
     eigen.GeneralisedComplexSolver(eigenParams, H, B, eigenvalues, eigenvectorCoefficients);
 
+    constexpr f64 eVperHartree = 27.211396641308;
     u32 valIdx = 0;
     for (auto val : eigenvalues) {
-        Logger::Trace("output eigenvalue %i: (%f, %f)",
-                      valIdx, val.real(), val.imag());
+        Logger::Trace("output eigenvalue %i: (%f, %f) Hartree, (%f, %f) eV",
+                      valIdx, val.real(), val.imag(), val.real()*eVperHartree, val.imag()*eVperHartree);
         valIdx++;
     }
+    constexpr f64 eVperkHz = 1000.0*4.1356*1e-15;
+
+    constexpr f64 Hydrogen_n1_l0_NIST_level_kHz = -3288086857127.6; // kHz
+    Logger::Trace("Hydrogen 1s (NIST): %f", Hydrogen_n1_l0_NIST_level_kHz*eVperkHz);
+
+    constexpr f64 Hydrogen_n2_l0_NIST_level_kHz = -822025443940.5; // kHz
+    Logger::Trace("Hydrogen 2s (NIST): %f", Hydrogen_n2_l0_NIST_level_kHz*eVperkHz);
+
+    constexpr f64 Hydrogen_n2_l1_NIST_level_kHz = -822015532742.95; // kHz
+    Logger::Trace("Hydrogen 2p (NIST): %f", Hydrogen_n2_l1_NIST_level_kHz*eVperkHz);
     return 0;
 }

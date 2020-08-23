@@ -16,40 +16,99 @@ Atom::Bsplines::Bsplines(u32 numKnotPoints_, u32 bsplineOrder_)
     m_Sp.resize(m_order, Complex(0.0));
 }
 
-void Atom::Bsplines::setupKnotPoints(const std::vector<Complex> &gridPoints) {
+void Atom::Bsplines::setupKnotPoints(const std::vector<Complex> &gridPoints, Atom::knotSequenceType sequenceType) {
     u32 numberOfGhostPointsInEachEnd = (m_order - 1);
     u32 numberOfPhysicalKnotPoints = m_numKnotPoints - 2 * numberOfGhostPointsInEachEnd;
 
     // For proper indexing
     u32 offset = numberOfGhostPointsInEachEnd;
-    u32 stride = (u32) (gridPoints.size() / (numberOfPhysicalKnotPoints - 1));
 
-    // Linear knot sequence
-    {
-        // set ghost knot points
-        for (u32 i = 0; i < numberOfGhostPointsInEachEnd; ++i) {
-            // Set first k points to first grid point value.
-            m_knotPoints[i] = gridPoints[0];
 
-            // Set last k points to last grid point value.
-            u32 backwardsCountIndex = (m_knotPoints.size() - i) - 1;
-            m_knotPoints[backwardsCountIndex] = gridPoints[gridPoints.size() - 1];
+    if( sequenceType == Atom::knotSequenceType::Linear) {
+        // Linear knot sequence
+        {
+            // Linear stride
+            u32 stride = (u32) (gridPoints.size() / (numberOfPhysicalKnotPoints - 1));
+
+            // set ghost knot points
+            for (u32 i = 0; i < numberOfGhostPointsInEachEnd; ++i) {
+                // Set first k points to first grid point value.
+                m_knotPoints[i] = gridPoints[0];
+
+                // Set last k points to last grid point value.
+                u32 backwardsCountIndex = (m_knotPoints.size() - i) - 1;
+                m_knotPoints[backwardsCountIndex] = gridPoints[gridPoints.size() - 1];
+            }
+
+            // Set starting physical knotpoint
+            m_knotPoints[offset] = gridPoints[0];
+
+            // Set physical knotpoints except start and end
+            for (u32 i = 1; i < numberOfPhysicalKnotPoints - 1; ++i) {
+                u32 knotPointIndex = i + offset;
+                u32 gridIndex = i * stride;
+                ASSERT(gridIndex < gridPoints.size() - 1);
+                Complex knotPointValue = gridPoints[gridIndex];
+                m_knotPoints[knotPointIndex] = knotPointValue;
+            }
+
+            // Set physical endpoint
+            m_knotPoints[m_knotPoints.size() - offset - 1] = gridPoints[gridPoints.size() - 1];
         }
+    }
 
-        // Set starting physical knotpoint
-        m_knotPoints[offset] = gridPoints[0];
+    if( sequenceType == Atom::knotSequenceType::firstPointsCloserThenLinear) {
+        {
+            // set ghost knot points
+            for (u32 i = 0; i < numberOfGhostPointsInEachEnd; ++i) {
+                // Set first k points to first grid point value.
+                m_knotPoints[i] = gridPoints[0];
 
-        // Set physical knotpoints except start and end
-        for (u32 i = 1; i < numberOfPhysicalKnotPoints - 1; ++i) {
-            u32 knotPointIndex = i + offset;
-            u32 gridIndex = i * stride;
-            ASSERT(gridIndex < gridPoints.size() - 1);
-            Complex knotPointValue = gridPoints[gridIndex];
-            m_knotPoints[knotPointIndex] = knotPointValue;
+                // Set last k points to last grid point value.
+                u32 backwardsCountIndex = (m_knotPoints.size() - i) - 1;
+                m_knotPoints[backwardsCountIndex] = gridPoints[gridPoints.size() - 1];
+            }
+
+            // Set starting physical knotpoint
+            m_knotPoints[offset] = gridPoints[0];
+
+
+            // Set tighter cluster close to zero
+            u32 clusterEndIndex = 12;
+            auto clusterPointDiff = gridPoints[5]-gridPoints[0]/3.0;
+            auto lastKnotPoint = Complex(0.0);
+            for (u32 i = 1; i <= clusterEndIndex; i++) {
+                u32 knotPointIndex = i + offset;
+                Complex knotPointValue = gridPoints[0]+clusterPointDiff*((f64)i);
+                m_knotPoints[knotPointIndex] = knotPointValue;
+                lastKnotPoint = knotPointValue;
+            }
+
+            // find index for lastKnotPoint on grid:
+            u32 gridPointIndex = 0;
+            for (auto point : gridPoints) {
+                if(point.real() > lastKnotPoint.real()) {
+                    break;
+                }
+                gridPointIndex += 1;
+            }
+            Logger::Trace("gridPointIndex for lastKnotPoint: %i", gridPointIndex);
+
+            u32 numberOfPhysicalPointsAfterCluster = numberOfPhysicalKnotPoints - clusterEndIndex;
+            u32 stride = (u32) (gridPoints.size() - gridPointIndex+1) / (numberOfPhysicalPointsAfterCluster -1);
+            // Set physical knotpoints between cluster and end point
+            for (u32 i = 0; i < numberOfPhysicalPointsAfterCluster; ++i) {
+                u32 knotPointIndex = i + offset + clusterEndIndex;
+                u32 gridIndex = gridPointIndex + i * stride;
+                Logger::Trace("gridIndex %i", gridIndex);
+                ASSERT(gridIndex < gridPoints.size() - 1);
+                Complex knotPointValue = gridPoints[gridIndex];
+                m_knotPoints[knotPointIndex] = knotPointValue;
+            }
+
+            // Set physical endpoint
+            m_knotPoints[m_knotPoints.size() - offset - 1] = gridPoints[gridPoints.size() - 1];
         }
-
-        // Set physical endpoint
-        m_knotPoints[m_knotPoints.size() - offset - 1] = gridPoints[gridPoints.size() - 1];
     }
 
 }

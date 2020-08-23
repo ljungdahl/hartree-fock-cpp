@@ -6,6 +6,11 @@
 
 namespace Atom {
 
+    enum knotSequenceType {
+        Linear = 0,
+        firstPointsCloserThenLinear = 1
+    };
+
     class Bsplines {
     public:
         u32 m_numKnotPoints;
@@ -14,7 +19,7 @@ namespace Atom {
         std::vector<Complex> m_knotPoints;
     public:
         Bsplines(u32 numKnotPoints_, u32 bsplineOrder_);
-        void setupKnotPoints(const std::vector<Complex> &gridPoints);
+        void setupKnotPoints(const std::vector<Complex> &gridPoints, knotSequenceType sequenceType);
         void DebugLogKnotSequence();
         u32 numberOfBsplines();
         Complex GetBsplineAtCoordinate(Complex coordinate, u32 bsplineIndex);
