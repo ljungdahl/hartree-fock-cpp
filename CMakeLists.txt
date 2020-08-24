@@ -53,7 +53,6 @@ add_executable(${PROJECT_NAME}
         src/Bsplines.cpp
         src/Grid.cpp
         src/FileIO.cpp
-        src/testing_mkl.cpp
         src/Matrix.cpp
         src/GaussLegendre.cpp
         src/Eigenproblems.cpp)
