@@ -2,17 +2,22 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate as spi
 
-data = np.loadtxt("bsplines.dat")
+grid = np.loadtxt("dat/grid.dat")
 
-radfunc_data = np.loadtxt("radialfunction.dat")
+plt.figure(1)
+# for i in range(7):
+for i in range(1):
+    fname = "dat/eigenvector_function_%i.dat" % i
+    eigenfunction = np.loadtxt(fname)
 
-x = data[:, 0]
+    x = grid
+    f = eigenfunction[:, 0]
+    f[1:] = f[1:]/x[1:]
+    f2 = f*f
+    normed_f = f2/sum(f2)
+    plt.plot(x, normed_f)
 
-f = radfunc_data/x
-f2 = f*f
 
-plt.plot(x, f2)
 
+plt.xlim([0.0, 20.0])
 plt.show()
-
-

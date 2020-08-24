@@ -1,5 +1,7 @@
 #pragma once
 
+#define MKL_INTERFACE_LAYER LP64
+
 #include <vector>
 
 #include "Matrix.h"

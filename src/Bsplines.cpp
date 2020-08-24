@@ -92,7 +92,7 @@ void Atom::Bsplines::setupKnotPoints(const std::vector<Complex> &gridPoints, Ato
                 }
                 gridPointIndex += 1;
             }
-            Logger::Trace("gridPointIndex for lastKnotPoint: %i", gridPointIndex);
+//            Logger::Trace("gridPointIndex for lastKnotPoint: %i", gridPointIndex);
 
             u32 numberOfPhysicalPointsAfterCluster = numberOfPhysicalKnotPoints - clusterEndIndex;
             u32 stride = (u32) (gridPoints.size() - gridPointIndex+1) / (numberOfPhysicalPointsAfterCluster -1);
@@ -100,7 +100,7 @@ void Atom::Bsplines::setupKnotPoints(const std::vector<Complex> &gridPoints, Ato
             for (u32 i = 0; i < numberOfPhysicalPointsAfterCluster; ++i) {
                 u32 knotPointIndex = i + offset + clusterEndIndex;
                 u32 gridIndex = gridPointIndex + i * stride;
-                Logger::Trace("gridIndex %i", gridIndex);
+//                Logger::Trace("gridIndex %i", gridIndex);
                 ASSERT(gridIndex < gridPoints.size() - 1);
                 Complex knotPointValue = gridPoints[gridIndex];
                 m_knotPoints[knotPointIndex] = knotPointValue;

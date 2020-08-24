@@ -27,8 +27,10 @@ endif (WIN32)
 if (UNIX)
     message("Unix MKL 2020 Include!")
 
-    set(MKL_DIR
-            /opt/intel/mkl)
+        set(MKL_DIR
+                /opt/intel/mkl)
+#    set(MKL_DIR
+#            /home/anton/lib/mkl/mkl)
 
     set(MKL_LIB_DIR ${MKL_DIR}/lib/intel64)
 
@@ -46,6 +48,7 @@ include_directories(${MKL_INCLUDE_DIRS})
 include_directories(src)
 
 add_executable(${PROJECT_NAME}
+        src/main.cpp
         src/logger.cpp
         src/Bsplines.cpp
         src/Grid.cpp
@@ -53,27 +56,14 @@ add_executable(${PROJECT_NAME}
         src/testing_mkl.cpp
         src/Matrix.cpp
         src/GaussLegendre.cpp
-        src/main.cpp src/Eigenproblems.cpp src/Eigenproblems.h)
+        src/Eigenproblems.cpp)
 
 if (UNIX)
-    # Assuming we use gcc...
-    # Static linking MKL libs
-    set(MKL_INTERFACE_LAYER
-            ${MKL_LIB_DIR}/libmkl_intel_lp64.a)
-    set(MKL_COMPUTATIONAL_LAYER
-            ${MKL_LIB_DIR}/libmkl_core.a)
-    # Note! Using GNU libgomp
-    set(MKL_GNUOPENMP
-            ${MKL_LIB_DIR}/libmkl_gnu_thread.a)
-    #Combine all libs
-    set(MKL_LIBRARIES
-            ${MKL_INTERFACE_LAYER} ${MKL_GNUOPENMP} ${MKL_COMPUTATIONAL_LAYER})
-
-    target_link_libraries(${PROJECT_NAME} ${MKL_LIBRARIES})
+    # Single Dynamic Link library used on my Arch Linu machine!
 
     # We get these options from the Intel link-line tool.
     set(GCC_COVERAGE_COMPILE_FLAGS "-m64")
-    set(GCC_COVERAGE_LINK_FLAGS "-lgomp -lpthread -lm -ldl")
+    set(GCC_COVERAGE_LINK_FLAGS "-L${MKL_DIR}/lib/intel64 -Wl,--no-as-needed -lmkl_rt -lpthread -lm -ldl")
 
     # Append our custom flags
     set(CMAKE_CXX_FLAGS

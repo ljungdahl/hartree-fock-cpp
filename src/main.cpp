@@ -1,8 +1,10 @@
 #include <iostream>
 #include <cstdio>
 #include <cmath>
+#include <string>
 
-#include "mkl.h"
+#define MKL_INTERFACE_LAYER LP64
+#define MKL_THREADING_LAYER INTEL
 
 #include "typedefs.h"
 #include "custom_asserts.h"
@@ -15,13 +17,13 @@
 #include "Eigenproblems.h"
 
 namespace Atom {
-    enum AngularMomentumQuantumNumber {
-        s = 0,
-        p = 1,
-        d = 2,
-        f = 3,
-        g = 4,
-    };
+enum AngularMomentumQuantumNumber {
+    s = 0,
+    p = 1,
+    d = 2,
+    f = 3,
+    g = 4,
+};
 }
 
 typedef LA::Matrix<Complex> ZMatrix;
@@ -32,7 +34,7 @@ void writeKnotPointsToFile(const std::vector<Complex> &knotPts) {
         output.push_back(point.real());
     }
 
-    FileIO::writeColDataToFile(output, "../knotpoints.dat");
+    FileIO::writeColDataToFile(output, "../dat/knotpoints.dat");
 }
 
 void writeGridToFile(const std::vector<Complex> &grid) {
@@ -41,26 +43,24 @@ void writeGridToFile(const std::vector<Complex> &grid) {
         output.push_back(point.real());
     }
 
-    FileIO::writeColDataToFile(output, "../grid.dat");
+    FileIO::writeColDataToFile(output, "../dat/grid.dat");
 }
 
-
 int main() {
-//    MKL_Test();
+    constexpr f64 eVperHartree = 27.211396641308;
 
     // Atomic units. Let's do a 10 Bohr radii sized grid.
-    constexpr u32 numGridPoints = 1000;
-    constexpr f64 gridStart = 0.0, gridEnd = 10.0;
+    constexpr u32 numGridPoints = 2000;
+    constexpr f64 gridStart = 0.0, gridEnd = 80.0;
     Atom::Grid Grid = Atom::Grid(numGridPoints, gridStart, gridEnd);
     writeGridToFile(Grid.getGridPoints());
 
     constexpr u32 bsplineOrder = 6;
-    constexpr u32 numKnotPoints = 80;
+    constexpr u32 numKnotPoints = 100;
     Atom::Bsplines Bsplines = Atom::Bsplines(numKnotPoints, bsplineOrder);
 
-    Bsplines.setupKnotPoints(Grid.getGridPoints(), Atom::knotSequenceType::firstPointsCloserThenLinear);
+    Bsplines.setupKnotPoints(Grid.getGridPoints(), Atom::knotSequenceType::Linear);
     writeKnotPointsToFile(Bsplines.m_knotPoints);
-
 
     GaussLegendre::Integration GaussLegendreIntegration = GaussLegendre::Integration();
 
@@ -85,7 +85,7 @@ int main() {
         bsplineIndices.push_back(i);
     }
     Logger::Trace("bsplineIndices.size(): %i, last element: %i",
-            bsplineIndices.size(), bsplineIndices[bsplineIndices.size()-1]);
+                  bsplineIndices.size(), bsplineIndices[bsplineIndices.size() - 1]);
 
     // We use Hartree atomic units. hbar = 1, electron charge e = 1, bohr radius a_0 = 1, electron mass m_e = 1.
     // We also have that 4\pi \epsilon_0 = 1,
@@ -94,7 +94,7 @@ int main() {
     // H' = (-0.5*d_r^2 + 0.5*l(l+1)/r^2 - Z/r).
     constexpr u32 Z = 1; // Hydrogen atom.
 
-    u32 l = Atom::AngularMomentumQuantumNumber::s; // l = 0,1,2,3... <-> s,p,d,f,...
+    u32 l = Atom::AngularMomentumQuantumNumber::d; // l = 0,1,2,3... <-> s,p,d,f,...
 
     // Homogeneous boundaries at r = 0, and r = infty, so we remove first and last bspline.
     u32 matrixDimension = bsplineIndices.size();
@@ -147,7 +147,7 @@ int main() {
             term3 += prefactor * pWeights[m] * f;
         }
 
-        Complex return_value = 0.5*term1 + (0.5*l*(l+1))*term2 - Z*term3;
+        Complex return_value = 0.5 * term1 + (0.5 * l * (l + 1)) * term2 - Z * term3;
         return return_value;
     };
 
@@ -202,22 +202,71 @@ int main() {
     LAPACK::Eigenproblems eigen = LAPACK::Eigenproblems();
     eigen.GeneralisedComplexSolver(eigenParams, H, B, eigenvalues, eigenvectorCoefficients);
 
-    constexpr f64 eVperHartree = 27.211396641308;
+    // Get the bound states, ie the states that have lowest energy for ground dstate ~0.5 Hartree
+    // and still negative energy  (implying bound state).
+    // TODO(anton): Understand where all of the other negative energies are coming from?
+    std::vector<Complex> selectedEigenvalues;
+    std::vector<u32> selectedIndices;
     u32 valIdx = 0;
+
+    f64 lowestEnergies[3] = {/*1s:*/-14.0, /*2p:*/-4.0, /*3d:*/-1.6};
+
     for (auto val : eigenvalues) {
-        Logger::Trace("output eigenvalue %i: (%f, %f) Hartree, (%f, %f) eV",
-                      valIdx, val.real(), val.imag(), val.real()*eVperHartree, val.imag()*eVperHartree);
+        auto lowerLimit = lowestEnergies[l];
+        if (val.real() > lowerLimit && val.real() < 0.0) {
+            selectedEigenvalues.push_back(val);
+//            Logger::Trace("output eigenvalue %i: (%E, %E) Hartree, (%E, %E) eV",
+//                          valIdx, val.real(), val.imag(), val.real() * eVperHartree, val.imag() * eVperHartree);
+            selectedIndices.push_back(valIdx);
+        }
         valIdx++;
     }
-    constexpr f64 eVperkHz = 1000.0*4.1356*1e-15;
+
+    std::vector<std::vector<Complex>> selected_eigenvectors;
+    for (auto index : selectedIndices) {
+        std::vector<Complex> eigenvector;
+        for (int i = 0; i < eigenvectorCoefficients.numRows(); i++) {
+            eigenvector.push_back(eigenvectorCoefficients(i, index));
+        }
+        selected_eigenvectors.push_back(eigenvector);
+    }
+
+    u32 vec_index = 0;
+    for (auto &vec : selected_eigenvectors) {
+
+        std::string filename = "../dat/eigenvector_function_" + std::to_string(vec_index) + ".dat";
+        vec_index++;
+
+        std::vector<Complex> outputFunction;
+
+        for (auto r : Grid.getGridPoints()) {
+            Complex value_at_r = Complex(0.0);
+            u32 bspl_index = 0;
+
+            for (auto coefficient : vec) {
+                value_at_r += coefficient * Bsplines.GetBsplineAtCoordinate(r, bsplineIndices[bspl_index]);
+                bspl_index += 1;
+            }
+            outputFunction.push_back(value_at_r);
+        }
+
+        FileIO::writeComplexVectorToFile(outputFunction, filename);
+    }
+
+    constexpr f64 eVperkHz = 1000.0 * 4.1356 * 1e-15;
 
     constexpr f64 Hydrogen_n1_l0_NIST_level_kHz = -3288086857127.6; // kHz
-    Logger::Trace("Hydrogen 1s (NIST): %f", Hydrogen_n1_l0_NIST_level_kHz*eVperkHz);
+    Logger::Trace("Hydrogen 1s (NIST): %f", Hydrogen_n1_l0_NIST_level_kHz * eVperkHz);
 
     constexpr f64 Hydrogen_n2_l0_NIST_level_kHz = -822025443940.5; // kHz
-    Logger::Trace("Hydrogen 2s (NIST): %f", Hydrogen_n2_l0_NIST_level_kHz*eVperkHz);
+    Logger::Trace("Hydrogen 2s (NIST): %f", Hydrogen_n2_l0_NIST_level_kHz * eVperkHz);
 
     constexpr f64 Hydrogen_n2_l1_NIST_level_kHz = -822015532742.95; // kHz
-    Logger::Trace("Hydrogen 2p (NIST): %f", Hydrogen_n2_l1_NIST_level_kHz*eVperkHz);
+    Logger::Trace("Hydrogen 2p (NIST): %f", Hydrogen_n2_l1_NIST_level_kHz * eVperkHz);
+
+
+    constexpr f64 Hydrogen_n3_l2_NIST_level_kHz = -365339565239.0; // kHz
+    Logger::Trace("Hydrogen 3d (NIST): %f", Hydrogen_n3_l2_NIST_level_kHz * eVperkHz);
+
     return 0;
 }
