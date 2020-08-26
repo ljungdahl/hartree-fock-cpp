@@ -11,23 +11,42 @@ GaussLegendre::Integration::Integration() {
 
 // TODO(anton): Write my own function to generate the weights and abscissae given a number of integration points.
 
+// Same layout as python version
     m_ZAbscissaeSixPoints = {
-            Complex(-0.932469, 0.0),
-            Complex(-0.661209, 0.0),
-            Complex(-0.238619, 0.0),
-            Complex(0.238619, 0.0),
-            Complex(0.661209, 0.0),
-            Complex(0.932469, 0.0)
+            Complex(0.6612093864662645, 0.0),
+            Complex(-0.6612093864662645, 0.0),
+            Complex(-0.2386191860831969, 0.0),
+            Complex(0.2386191860831969, 0.0),
+            Complex(-0.932469514203152, 0.0),
+            Complex(0.932469514203152, 0.0)
     };
 
     m_ZWeightsSixPoints = {
-            Complex(0.171324, 0.0),
-            Complex(0.360762, 0.0),
-            Complex(0.467914, 0.0),
-            Complex(0.467914, 0.0),
-            Complex(0.360762, 0.0),
-            Complex(0.171324, 0.0)
+            Complex(0.3607615730481386, 0.0),
+            Complex(0.3607615730481386, 0.0),
+            Complex(0.4679139345726910, 0.0),
+            Complex(0.4679139345726910, 0.0),
+            Complex(0.1713244923791704, 0.0),
+            Complex(0.1713244923791704, 0.0)
     };
+
+//    m_ZAbscissaeSixPoints = {
+//            Complex(-0.932469, 0.0),
+//            Complex(-0.661209, 0.0),
+//            Complex(-0.238619, 0.0),
+//            Complex(0.238619, 0.0),
+//            Complex(0.661209, 0.0),
+//            Complex(0.932469, 0.0)
+//    };
+//
+//    m_ZWeightsSixPoints = {
+//            Complex(0.171324, 0.0),
+//            Complex(0.360762, 0.0),
+//            Complex(0.467914, 0.0),
+//            Complex(0.467914, 0.0),
+//            Complex(0.360762, 0.0),
+//            Complex(0.171324, 0.0)
+//    };
 }
 
 const Complex* GaussLegendre::Integration::getPointerToZAbscissae(u32 points) {

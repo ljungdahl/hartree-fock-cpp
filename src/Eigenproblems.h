@@ -38,8 +38,7 @@ namespace LAPACK {
         Eigenproblems();
 
         void GeneralisedComplexSolver(EigenParameters params, const ZMatrix &A_Matrix, const ZMatrix &B_matrix,
-                                      std::vector<Complex> &out_eigenvalues, ZMatrix &out_eigenvectors);
-
+                                      ZVector &out_eigenvalues, ZMatrix &out_eigenvectors);
     private:
 
     };

@@ -3,7 +3,7 @@
 
 #include "Eigenproblems.h"
 
-std::vector<u32> sortZVectorIndices(const std::vector<Complex> &v) {
+std::vector<u32> sortZVectorIndices(const ZVector &v) {
     std::vector<u32> indices(v.size());
     std::iota(indices.begin(), indices.end(), 0); // Fills indices with integers from 0 to v.size()-1
 
@@ -12,11 +12,28 @@ std::vector<u32> sortZVectorIndices(const std::vector<Complex> &v) {
     // to avoid unnecessary index re-orderings
     // when v contains elements of equal values
     std::stable_sort(indices.begin(), indices.end(),
-                [&v](u32 i, u32 j) {
-                    Complex a = v[i];
-                    Complex b = v[j];
-                        return a.real() < b.real() || a.real() == b.real() && a.imag() < b.imag();
-                    });
+                     [&v](u32 i, u32 j) {
+                         Complex a = v[i];
+                         Complex b = v[j];
+                         return a.real() < b.real() || a.real() == b.real() && a.imag() < b.imag();
+                     });
+    return indices;
+}
+
+std::vector<u32> sortDVectorIndices(const DVector &v) {
+    std::vector<u32> indices(v.size());
+    std::iota(indices.begin(), indices.end(), 0); // Fills indices with integers from 0 to v.size()-1
+
+    // sort indexes based on comparing values in v
+    // using std::stable_sort instead of std::sort
+    // to avoid unnecessary index re-orderings
+    // when v contains elements of equal values
+    std::stable_sort(indices.begin(), indices.end(),
+                     [&v](u32 i, u32 j) {
+                         f64 a = v[i];
+                         f64 b = v[j];
+                         return a < b || a == b;
+                     });
     return indices;
 }
 
@@ -24,7 +41,7 @@ LAPACK::Eigenproblems::Eigenproblems() {
 }
 
 void LAPACK::Eigenproblems::GeneralisedComplexSolver(LAPACK::EigenParameters params, const ZMatrix &A_Matrix,
-                                                     const ZMatrix &B_Matrix, std::vector<Complex> &out_eigenvalues,
+                                                     const ZMatrix &B_Matrix, ZVector &out_eigenvalues,
                                                      ZMatrix &out_eigenvectors) {
 // This function wraps the zggev LAPACK-routine which solves the generalised eigenproblem
 // Ac = EBc, where A,B are nonsymmetric n x n-matrices, and c an eigenvector.
@@ -48,30 +65,30 @@ void LAPACK::Eigenproblems::GeneralisedComplexSolver(LAPACK::EigenParameters par
     // ZMatrix internal storage is a vector anyway and LAPACK routine just takes pointers.
     // Thus it is easy to use std::vectors for the local data and we can hope the compiler can do some
     // nice things for the copy operation.
-    std::vector<Complex> temp_A; //
+    ZVector temp_A; //
     temp_A.resize(n * n);
     A_Matrix.copyToVector(temp_A);
 
-    std::vector<Complex> temp_B;
+    ZVector temp_B;
     temp_B.resize(n * n);
     B_Matrix.copyToVector(temp_B);
 
     // The generalised eigenvalue is a ratio E = alpha / beta, and what we get back from zggev are arrays
     // with the n values alpha and beta.
-    std::vector<Complex> alpha;
+    ZVector alpha;
     alpha.resize(n);
 
-    std::vector<Complex> beta;
+    ZVector beta;
     beta.resize(n);
 
-    std::vector<Complex> leftEigVecs;
+    ZVector leftEigVecs;
     leftEigVecs.resize(1);
 
-    std::vector<Complex> rightEigVecs;
+    ZVector rightEigVecs;
     rightEigVecs.resize(n * n);
 
     LAPACK_CHECK(
-            LAPACKE_zggev(layout, computeLeft, computeRight, n,
+            LAPACKE_zggev3(layout, computeLeft, computeRight, n,
                           temp_A.data(), leadingDimension_A,
                           temp_B.data(), leadingDimension_B,
                           alpha.data(), beta.data(),
@@ -83,24 +100,40 @@ void LAPACK::Eigenproblems::GeneralisedComplexSolver(LAPACK::EigenParameters par
             "LAPACK::Eigenproblems::GeneralComplexSolver(): Call to LAPACKE_zggev finished successfully (INFO == 0)");
 
 
-    std::vector<Complex> unsorted_eigenvalues;
+//    Logger::Trace("i alpha[i]:              beta[i]:       alpha[i]/beta[i]     ");
+    ZVector unsorted_eigenvalues;
     for (int i = 0; i < n; i++) {
         Complex val;
-        if(std::abs(beta[i]) < 1e-8) {
+        if (std::abs(beta[i]) < 1e-8) {
             val = alpha[i];
-            Logger::Warn("beta[%i] < 1e-8, eigenvalue uses only alpha component.", i);
+            Logger::Warn("LAPACK::Eigenproblems::GeneralComplexSolver(): \n"
+                         "beta[%i] < 1e-8, eigenvalue %i uses only alpha component. (should be infinity)", i);
         }
-        val = alpha[i]/beta[i];
+
+
+        val = alpha[i] / beta[i];
         unsorted_eigenvalues.push_back(val);
+//        Logger::Trace("%i        (%f,%f)            (%f, %f)          (%f,%f)",
+//                i, alpha[i].real(), alpha[i].imag(),
+//                beta[i].real(), beta[i].imag(),
+//                val.real(), val.imag());
     }
     auto old_indices = sortZVectorIndices(unsorted_eigenvalues);
 
-    std::vector<Complex> eigenvalues;
-    for (auto i : old_indices) {
-        eigenvalues.push_back(unsorted_eigenvalues[i]);
+    ZVector eigenvalues;
+    eigenvalues.resize(unsorted_eigenvalues.size(), Complex(0.0));
+    ZVector sorted_alpha;
+    ZVector sorted_beta;
+    u32 i = 0;
+    for (auto i_old : old_indices) {
+        eigenvalues[i] = unsorted_eigenvalues[i_old];
+        sorted_alpha.push_back(alpha[i_old]);
+        sorted_beta.push_back(beta[i_old]);
+//        eigenvalues.push_back(unsorted_eigenvalues[i]);
+        i++;
     }
 
-    if(eigenvalues.size() == out_eigenvalues.size()) {
+    if (eigenvalues.size() == out_eigenvalues.size()) {
         out_eigenvalues = eigenvalues;
     } else {
         out_eigenvalues.clear();
@@ -126,4 +159,3 @@ void LAPACK::Eigenproblems::GeneralisedComplexSolver(LAPACK::EigenParameters par
 
 
 }
-
