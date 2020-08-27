@@ -1,3 +1,4 @@
+#include <cmath>
 #include <algorithm> // std::sort, std::stable_sort
 #include <numeric> // std::iota, just to fill a container with sequentally increasing values.
 
@@ -157,5 +158,18 @@ void LAPACK::Eigenproblems::GeneralisedComplexSolver(LAPACK::EigenParameters par
         }
     }
 
+    // Normalize YES/NO???
+//    for (int j = 0; j < out_eigenvectors.numCols(); j++) {
+//        f64 magnitudeSquared = 0.0;
+//        for (int i = 0; i < out_eigenvectors.numRows(); i++) {
+//            auto abs_val = std::abs(out_eigenvectors(i,j));
+//            magnitudeSquared += abs_val*abs_val; // |x_ij|^2
+//        }
+//        f64 magnitude = sqrt(magnitudeSquared);
+//        for (int i = 0; i < out_eigenvectors.numRows(); i++) {
+//            auto val = out_eigenvectors(i,j);
+//            out_eigenvectors(i,j) = val/magnitude;
+//        }
+//    }
 
 }

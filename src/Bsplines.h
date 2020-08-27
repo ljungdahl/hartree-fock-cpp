@@ -17,6 +17,7 @@ namespace Atom {
         u32 m_order;
         u32 m_numBsplines;
         std::vector<Complex> m_knotPoints;
+        std::vector<u32> m_usedBsplineIndices;
     public:
         Bsplines(u32 numKnotPoints_, u32 bsplineOrder_);
         void setupKnotPoints(const std::vector<Complex> &gridPoints, knotSequenceType sequenceType);
@@ -26,6 +27,7 @@ namespace Atom {
         Complex GetBsplineAtCoordinate(Complex coordinate, u32 bsplineIndex, u32 order);
         Complex GetBsplineFirstDerivativeAtCoordinate(Complex coordinate, u32 bsplineIndex);
         Complex GetDerivativeAtCoordinate(Complex coordinate, u32 bsplineIndex);
+        void SetBoundaryConditionBsplineIndices(std::vector<u32>& indices);
 
     private:
         std::vector<Complex> m_bsplvb_dL;

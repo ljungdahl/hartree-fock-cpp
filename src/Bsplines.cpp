@@ -175,7 +175,6 @@ void Atom::Bsplines::bsplvb_Complex(Complex coordinate, u32 left, u32 k_order) {
 
 }
 
-
 Complex Atom::Bsplines::GetBsplineAtCoordinate(Complex coordinate, u32 bsplineIndex) {
     //TODO(anton): How to get proper first Bspline? How to think about it?
     /*
@@ -382,6 +381,12 @@ Complex Atom::Bsplines::GetBsplineFirstDerivativeAtCoordinate(Complex coordinate
 
 
     return derivative;
+}
+
+void Atom::Bsplines::SetBoundaryConditionBsplineIndices(std::vector<u32> &indices) {
+    for(auto index : indices) {
+        m_usedBsplineIndices.push_back(index);
+    }
 }
 
 
