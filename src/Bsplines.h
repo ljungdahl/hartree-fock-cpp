@@ -25,8 +25,10 @@ namespace Atom {
         u32 numberOfBsplines();
         Complex GetBsplineAtCoordinate(Complex coordinate, u32 bsplineIndex);
         Complex GetBsplineAtCoordinate(Complex coordinate, u32 bsplineIndex, u32 order);
-        Complex GetBsplineFirstDerivativeAtCoordinate(Complex coordinate, u32 bsplineIndex);
         Complex GetDerivativeAtCoordinate(Complex coordinate, u32 bsplineIndex);
+        Complex GetDerivativeAtCoordinate(Complex coordinate, u32 bsplineIndex, u32 order);
+        Complex GetSecondDerivativeAtCoordinate(Complex coordinate, u32 bsplineIndex);
+        Complex GetSecondDerivativeAtCoordinate(Complex coordinate, u32 bsplineIndex, u32 order);
         void SetBoundaryConditionBsplineIndices(std::vector<u32>& indices);
 
     private:

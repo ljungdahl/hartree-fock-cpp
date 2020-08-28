@@ -11,7 +11,23 @@ GaussLegendre::Integration::Integration() {
 
 // TODO(anton): Write my own function to generate the weights and abscissae given a number of integration points.
 
-// Same layout as python version
+
+// k = 4
+    m_ZAbscissaeFourPoints = {
+            Complex(-0.3399810435848563, 0.0),
+            Complex(0.3399810435848563, 0.0),
+            Complex(-0.8611363115940526, 0.0),
+            Complex(0.8611363115940526, 0.0)
+    };
+
+    m_ZWeightsFourPoints = {
+            Complex(0.6521451548625461, 0.0),
+            Complex(0.6521451548625461, 0.0),
+            Complex(0.3478548451374538, 0.0),
+            Complex(0.3478548451374538, 0.0)
+    };
+
+    // k = 6
     m_ZAbscissaeSixPoints = {
             Complex(0.6612093864662645, 0.0),
             Complex(-0.6612093864662645, 0.0),
@@ -29,59 +45,58 @@ GaussLegendre::Integration::Integration() {
             Complex(0.1713244923791704, 0.0),
             Complex(0.1713244923791704, 0.0)
     };
-
-//    m_ZAbscissaeSixPoints = {
-//            Complex(-0.932469, 0.0),
-//            Complex(-0.661209, 0.0),
-//            Complex(-0.238619, 0.0),
-//            Complex(0.238619, 0.0),
-//            Complex(0.661209, 0.0),
-//            Complex(0.932469, 0.0)
-//    };
-//
-//    m_ZWeightsSixPoints = {
-//            Complex(0.171324, 0.0),
-//            Complex(0.360762, 0.0),
-//            Complex(0.467914, 0.0),
-//            Complex(0.467914, 0.0),
-//            Complex(0.360762, 0.0),
-//            Complex(0.171324, 0.0)
-//    };
 }
 
-const Complex* GaussLegendre::Integration::getPointerToZAbscissae(u32 points) {
-    if(points == 6) {
+const Complex *GaussLegendre::Integration::getPointerToZAbscissae(u32 points) {
+    if (points == 6) {
         return m_ZAbscissaeSixPoints.data();
     }
+
+    if (points == 4) {
+        return m_ZAbscissaeFourPoints.data();
+    }
+
     Logger::Warn("getPointerToZAbscissae(k = %i): returned nullptr!", points);
     return nullptr;
 }
 
-const Complex* GaussLegendre::Integration::getPointerToZWeights(u32 points) {
-    if(points == 6) {
+const Complex *GaussLegendre::Integration::getPointerToZWeights(u32 points) {
+    if (points == 6) {
         return m_ZWeightsSixPoints.data();
+    }
+
+    if (points == 4) {
+        return m_ZWeightsFourPoints.data();
     }
     Logger::Warn("getPointerToZWeights(k = %i): returned nullptr!", points);
     return nullptr;
 }
 
 Complex GaussLegendre::Integration::b_minus_a_half(Complex a, Complex b) {
-    Complex return_value = 0.5*(b-a);
+    Complex return_value = 0.5 * (b - a);
     return return_value;
 }
 
 std::vector<Complex> GaussLegendre::Integration::getShiftedAbscissae(Complex a, Complex b, u32 points) {
     std::vector<Complex> shiftedAbscissae;
-    Complex b_minus_a_half = 0.5*(b-a);
-    Complex b_plus_a_half = 0.5*(b+a);
+    Complex b_minus_a_half = 0.5 * (b - a);
+    Complex b_plus_a_half = 0.5 * (b + a);
+
     if (points == 6) {
         for (auto abscissa : m_ZAbscissaeSixPoints) {
-            shiftedAbscissae.push_back(abscissa*b_minus_a_half+b_plus_a_half);
+            shiftedAbscissae.push_back(abscissa * b_minus_a_half + b_plus_a_half);
+        }
+        return shiftedAbscissae;
+    }
+
+    if (points == 4) {
+        for (auto abscissa : m_ZAbscissaeFourPoints) {
+            shiftedAbscissae.push_back(abscissa * b_minus_a_half + b_plus_a_half);
         }
         return shiftedAbscissae;
     }
 
     Logger::Warn("getShiftedAbscissae(a = (%f,%f), b = (%f,%f), k = %i) returned with zero size vector.",
-            a.real(), a.imag(), b.real(), b.imag(), points);
+                 a.real(), a.imag(), b.real(), b.imag(), points);
     return shiftedAbscissae;
 }

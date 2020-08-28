@@ -44,10 +44,27 @@ namespace Atom {
 
 }
 
+
 // fwd declare
+void setupPoissonLHS(Atom::Bsplines &Bsplines, ZMatrix &rhs, GaussLegendre::Integration &GLI);
+
 void setupGeneralisedEVPMatrices(ZMatrix &H, ZMatrix &B,
                                  Atom::Bsplines &Bsplines, GaussLegendre::Integration &GLI,
                                  std::vector<u32> bsplineIndices, u32 l, u32 Z);
+
+Complex ChargeDensityAtCoordinate(Complex r, Atom::Bsplines &Bsplines,
+                                  const ZMatrix &coefficientMatrix, const std::vector<u32> &physicalIndices,
+                                  const Atom::SystemParameters &params);
+
+Complex GetRadialFunctionAtCoordinate(Complex r, Atom::Bsplines &Bsplines, u32 functionIndex,
+                                      const ZMatrix &coefficients);
+
+void CalculateRadialFunctionNorms(Atom::Bsplines &Bsplines,
+                                  const ZMatrix &coefficientMatrix, const std::vector<u32> &physicalIndices,
+                                  Atom::SystemParameters &params, GaussLegendre::Integration &GLI);
+
+void IntegrateChargeDensity(Atom::Bsplines &Bsplines, ZMatrix &coeffs, std::vector<u32> &physicalIndices,
+                            Atom::SystemParameters AtomParameters, GaussLegendre::Integration &GLI);
 
 void writeKnotPointsToFile(const ZVector &knotPts) {
     DVector output;
@@ -65,6 +82,54 @@ void writeGridToFile(const ZVector &grid) {
     }
 
     FileIO::writeColDataToFile(output, "../dat/grid.dat");
+}
+
+void writeBsplineBasisFunctionToFile(const ZVector &basisFunctionOfR, u32 bsplineIndex, u32 derivativeOrder) {
+    DVector output;
+    for (auto point : basisFunctionOfR) {
+        output.push_back(point.real());
+    }
+    std::string filename;
+    if (derivativeOrder == 2) {
+        filename = "../dat/dB2_" + std::to_string(bsplineIndex) + ".dat"; // dB2
+    } else if (derivativeOrder == 1) { // dB
+        filename = "../dat/dB_" + std::to_string(bsplineIndex) + ".dat"; // dB2
+    } else { // B
+        filename = "../dat/B_" + std::to_string(bsplineIndex) + ".dat"; // dB2
+    }
+    ASSERT(!filename.empty());
+
+    FileIO::writeColDataToFile(output, filename);
+}
+
+void TestBsplineDerivatives(Atom::Bsplines &Bsplines, Atom::Grid &Grid) {
+    // We test k = 4 Bsplines, regular, first derivative, and second derivative.
+
+
+    std::vector<u32> orders = {0, 1, 2};
+
+    u32 bsplineIndex = 7;
+    for (auto order : orders) {
+        u32 derivOrder = order;
+        ZVector basisFunction;
+        for (auto r : Grid.getGridPoints()) {
+            Complex val = Complex(0.0);
+            if (derivOrder == 0) {
+                val = Bsplines.GetBsplineAtCoordinate(r, bsplineIndex);
+            }
+            if (derivOrder == 1) {
+                val = Bsplines.GetDerivativeAtCoordinate(r, bsplineIndex);
+//                Logger::Trace("first derivative for bspl #%i: (%f, %f)", bsplineIndex, val.real(), val.imag());
+            }
+            if (derivOrder == 2) {
+                val = Bsplines.GetSecondDerivativeAtCoordinate(r, bsplineIndex);
+                Logger::Trace("second derivative for bspl #%i: (%f, %f)", bsplineIndex, val.real(), val.imag());
+
+            }
+            basisFunction.push_back(val);
+        }
+        writeBsplineBasisFunctionToFile(basisFunction, bsplineIndex, derivOrder);
+    }
 }
 
 int main() {
@@ -119,7 +184,6 @@ int main() {
         AtomParameters.TotalOccupationNumber += shell.NumberOfElectrons;
     }
 
-
     // Homogeneous boundaries at r = 0, and r = \infty, so we remove first and last bspline.
     u32 matrixDimension = bsplineIndices.size();
     Logger::Trace("number of Bsplines included in calculation (matrixDimension): %i", matrixDimension);
@@ -156,18 +220,23 @@ int main() {
     Logger::Trace(" ");
     Logger::Trace("Negative eigenvalues:");
     for (int i = 0; i < gevp_Eigenvalues.size(); i++) {
+
         auto val = gevp_Eigenvalues[i];
+
         if (val.real() < 0.0 && i >= 20) {
+
             if (i == 20) {
                 auto val2 = gevp_Eigenvalues[i - 1];
                 Logger::Trace("Nonphysical before first physical? %i, (%f, %f) Hartree", i - 1, val2.real(),
                               val2.imag());
             }
+
             Logger::Trace("%i (%f, %f) Hartree,    (%f, %f) eV", i,
                           val.real(), val.imag(),
                           val.real() * eVperHartree, val.imag() * eVperHartree);
             physicalIndices.push_back(i);
         }
+
     }
 
     // Now we calculate radial charge density (averaged over angular parts)
@@ -175,137 +244,60 @@ int main() {
     // rho(r) = 1/4pi sum_j^occupied orbitals e * N_j (P_njlj(r)/r)^2
     // where N_j is occupation number for subshell n_jl_j.
     // If we do this correctly we should have 4pi \int rho(r) r^2 dr = N_occ.
-    auto GetRadialFunctionAtCoordinate = [&](Complex r, Atom::Bsplines &Bsplines, u32 functionIndex,
-                                             const ZMatrix &coefficients) {
 
-        auto return_value = Complex(0.0);
-        // Loop over all bspline coefficients and create superposition
-        // P(r) = sum_i c_i B_i(r)
-        ASSERT(coefficients.numRows() == Bsplines.m_usedBsplineIndices.size());
-        for (u32 i = 0; i < coefficients.numRows(); ++i) {
-            u32 bsplineIndex = Bsplines.m_usedBsplineIndices[i];
-            auto B_i = Bsplines.GetBsplineAtCoordinate(r, bsplineIndex);
-            auto c_i = coefficients(i, functionIndex);
-            return_value += c_i * B_i;
-        }
+    // Normalize radial functions. We save the resulting normSquardes in the relevant SubShell in AtomParameters.shells.
+    // We need to use this when calculating the charge density with properly normalised radial functions!!
+    CalculateRadialFunctionNorms(Bsplines, gevp_Eigenvectors, physicalIndices, AtomParameters,
+                                 GaussLegendreIntegration);
 
-        return return_value;
-    };
+    // Integrate charge density. This is for sanity checking.
+    IntegrateChargeDensity(Bsplines, gevp_Eigenvectors, physicalIndices, AtomParameters, GaussLegendreIntegration);
 
+    // Now we solve the poisson equation for direct electron-electron potential due to this charge density
+    // Nabla^2 V_dir = 1/r del^2 phi = -4\pi rho, where have used V_dir = phi(r)/r.
+    // The equation we solve then is del^2 phi(r) = -r4\pi rho(r).
 
-    // Normalize radial functions.
-    auto CalculateRadialFunctionNorms = [&](Atom::Bsplines &Bsplines,
-                                            const ZMatrix &coefficientMatrix, const std::vector<u32> &physicalIndices,
-                                            Atom::SystemParameters &params) {
+    // Here we use collocation method with a different bspline order, but with a lot more knotpts to get
+    // a good representation of the potential.
+    constexpr u32 poissonBsplineOrder = 4;
+    constexpr u32 poissonNumKnotPoints = 16; // So many knotpoints for this?
+    ASSERT(numGridPoints > numKnotPoints);
+    Atom::Bsplines poissonBsplines = Atom::Bsplines(poissonNumKnotPoints, poissonBsplineOrder);
+    poissonBsplines.setupKnotPoints(Grid.getGridPoints(), Atom::knotSequenceType::Linear);
+    writeKnotPointsToFile(poissonBsplines.m_knotPoints);
 
+    TestBsplineDerivatives(poissonBsplines, Grid);
 
-        // Loop over sub shell n_j l_j
-        u32 j = 0;
-        for (auto &shell : params.shells) {
-            // Get the index into eigenvector coefficient matrix that correspond to coefficients
-            // for the P_njlj (this shell's) radial function
-            u32 coefficientIndex = physicalIndices[j];
-            Complex norm = Complex(0.0);
-            for (u32 i = 0; i < Bsplines.m_numBsplines - 1; i++) {
-                // Loop here is so that the last point b will be at i+1, and at the last physical point;
-                // Shift so we don't integrate in ghost points
-                u32 knotIndex = i + Bsplines.m_order - 1;
-
-                Complex a = Bsplines.m_knotPoints[knotIndex];
-                Complex b = Bsplines.m_knotPoints[knotIndex + 1];
-
-                u32 numIntegrationPoints = Bsplines.m_order;
-                auto abscissae = GaussLegendreIntegration.getShiftedAbscissae(a, b, numIntegrationPoints);
-                ASSERT(abscissae.size() == numIntegrationPoints);
-                auto prefactor = GaussLegendreIntegration.b_minus_a_half(a, b);
-
-                if (std::abs(prefactor) < 1e-8) {
-                    continue;
-                }
-
-                auto pWeights = GaussLegendreIntegration.getPointerToZWeights(numIntegrationPoints);
-
-                auto term1 = Complex(0.0, 0.0);
-                for (int m = 0; m < numIntegrationPoints; ++m) {
-                    auto r = abscissae[m];
-                    auto f = GetRadialFunctionAtCoordinate(r, Bsplines,
-                                                           coefficientIndex,
-                                                           coefficientMatrix); // Radial function at coordinate r
-                    term1 += prefactor * pWeights[m] * f * f;
-                }
-
-                norm += term1;
-            }
-            shell.radialFunctionIntegratedOverAllSpace = std::abs(norm);
-            ++j;
-        }
-    };
-    CalculateRadialFunctionNorms(Bsplines, gevp_Eigenvectors, physicalIndices, AtomParameters);
-
-    // Lambda function def for charge density
-    auto ChargeDensityAtCoordinate = [&](Complex r, Atom::Bsplines &Bsplines,
-                                         const ZMatrix &coefficientMatrix, const std::vector<u32> &physicalIndices,
-                                         const Atom::SystemParameters &params) {
-
-        auto prefactor = g_OneOverFourPi; // 1/4pi
-
-        Complex rho_at_r = Complex(0.0);
-        if (std::abs(r) < 1e-8) {
-            return rho_at_r; // Return zero if we're close to the origin.
-        }
-
-        // Loop over sub shell n_j l_j
-        u32 j = 0;
-        for (auto &shell : params.shells) {
-            u32 N_j = shell.NumberOfElectrons; // Occupation number
-            // Get the index into eigenvector coefficient matrix that correspond to coefficients
-            // for the P_njlj (this shell's) radial function
-            u32 coefficientIndex = physicalIndices[j];
-            auto P_nl = GetRadialFunctionAtCoordinate(r, Bsplines,
-                                                      coefficientIndex,
-                                                      coefficientMatrix); // Radial function at coordinate r
-            auto P_normSquared = shell.radialFunctionIntegratedOverAllSpace;
-            P_nl = P_nl / sqrt(P_normSquared);
-            rho_at_r += prefactor * N_j * P_nl * P_nl / (r * r);
-            ++j;
-        }
-        return rho_at_r;
-    };
-
-    // Integrate charge density.
-    auto ChargeDensityIntegratedOverAllSpace = Complex(0.0);
-    for (u32 i = 0; i < Bsplines.m_numBsplines - 1; i++) {
-        // Loop here is so that the last point b will be at i+1, and at the last physical point;
-        // Shift so we don't integrate in ghost points
-        u32 knotIndex = i + Bsplines.m_order - 1;
-
-        Complex a = Bsplines.m_knotPoints[knotIndex];
-        Complex b = Bsplines.m_knotPoints[knotIndex + 1];
-
-        u32 numIntegrationPoints = Bsplines.m_order;
-        auto abscissae = GaussLegendreIntegration.getShiftedAbscissae(a, b, numIntegrationPoints);
-        ASSERT(abscissae.size() == numIntegrationPoints);
-        auto prefactor = GaussLegendreIntegration.b_minus_a_half(a, b);
-        if (std::abs(prefactor) < 1e-8) {
-            continue;
-        }
-        auto pWeights = GaussLegendreIntegration.getPointerToZWeights(numIntegrationPoints);
-
-        auto term1 = Complex(0.0, 0.0);
-        for (int m = 0; m < numIntegrationPoints; ++m) {
-            auto r = abscissae[m];
-            auto r2 = r * r;
-            auto f = r2 * ChargeDensityAtCoordinate(r, Bsplines, gevp_Eigenvectors, physicalIndices, AtomParameters);
-            term1 += prefactor * pWeights[m] * f;
-        }
-        ChargeDensityIntegratedOverAllSpace += g_FourPi * term1;
-//        Logger::Trace("%i ChargeDensityIntegratedOverAllSpace = (%f, %f), a = (%f, %f), b = (%f, %f)", i,
-//                      ChargeDensityIntegratedOverAllSpace.real(), ChargeDensityIntegratedOverAllSpace.imag(),
-//                      a.real(), a.imag(), b.real(), b.imag());
+    // For the poisson equation we say that at the origin everyting is zero, so we skip the first bspline;
+    // the one with index zero.
+    // We also say that the derivative of the solution (phi) is zero at the last knotpoint. The physical situation
+    // is that the potential is approximately constant "far out", so the derivative vanishes.
+    // A difference from the r = 0 zero condition, and the r -> infty zero condition from the eigenvalue problem,
+    // is that we actually want this condition on the second derivative to be present in the solution. SO for this
+    // endpoint boundary condition we can't just remove the coefficient frome the calculation, it is the
+    // rhs that should be zero here.
+    // We will be using all bsplines except the first one (index 0)
+    std::vector<u32> poissonBsplineIndices;
+    // Note that I am using zero indexing for Bspline, ie the first Bspline has index 0,
+    // and the last Bspline has index numBsplines-1.
+    for (u32 i = 1; i < poissonBsplines.numberOfBsplines(); i++) {
+        poissonBsplineIndices.push_back(i);
     }
-    Logger::Trace("4pi integral over all r rho(r)*r^2 dr = (%f, %f). For %s this should equal %i",
-                  ChargeDensityIntegratedOverAllSpace.real(), ChargeDensityIntegratedOverAllSpace.imag(),
-                  AtomParameters.Name.c_str(), AtomParameters.TotalOccupationNumber);
+    poissonBsplines.SetBoundaryConditionBsplineIndices(bsplineIndices);
+
+    // We have N-k unknowns (the c_n coeffiecients, one for each Bspline), but only really N-k-2 equations.
+    // If we use that c_0 = 0 we have N-k-1 unknowns, but still not enough equations. We can add an equation then for
+    // the last condition, so that the system size that we plug into LAPACK solver routines is N-k-1.
+    u32 poissonDimension = poissonBsplines.m_numKnotPoints - poissonBsplines.m_order - 1;
+    ZMatrix poissonLHS = ZMatrix(poissonDimension, poissonDimension);
+    setupPoissonLHS(poissonBsplines, poissonLHS, GaussLegendreIntegration);
+    Logger::Trace("Dimension for poisson equation LHS matrix: %i", poissonDimension);
+    for (u32 i = 0; i < poissonDimension; i++) {
+        for (u32 j = 0; j < poissonDimension; j++) {
+            printf("%f ", poissonLHS(i, j).real());
+        }
+        printf("\n");
+    }
 
     return 0;
 }
@@ -319,8 +311,12 @@ void setupGeneralisedEVPMatrices(ZMatrix &H, ZMatrix &B, Atom::Bsplines &Bspline
     auto calculate_H_matrix_element = [&](u32 i, u32 j, f64 l, f64 Z) {
         // Since we skip the first (index 0) and last (index numBsplines-1) Bsplines to
         // account for the boundary conditions, the indices into the matrix are not the same as the Bspline indices.
-        u32 bsplineIndex_j = bsplineIndices[j];
-        u32 bsplineIndex_i = bsplineIndices[i];
+        i32 bsplineIndex_j = bsplineIndices[j];
+        i32 bsplineIndex_i = bsplineIndices[i];
+
+        if (std::abs(bsplineIndex_i - bsplineIndex_j) > Bsplines.m_order) {
+            return Complex(0.0);
+        }
 
         Complex a = Bsplines.m_knotPoints[bsplineIndex_i];
         Complex b = Bsplines.m_knotPoints[bsplineIndex_i + Bsplines.m_order];
@@ -413,4 +409,160 @@ void setupGeneralisedEVPMatrices(ZMatrix &H, ZMatrix &B, Atom::Bsplines &Bspline
     }
 
 
+}
+
+Complex ChargeDensityAtCoordinate(Complex r, Atom::Bsplines &Bsplines,
+                                  const ZMatrix &coefficientMatrix, const std::vector<u32> &physicalIndices,
+                                  const Atom::SystemParameters &params) {
+
+    auto prefactor = g_OneOverFourPi; // 1/4pi
+
+    Complex rho_at_r = Complex(0.0);
+    if (std::abs(r) < 1e-8) {
+        return rho_at_r; // Return zero if we're close to the origin.
+    }
+
+    // Loop over sub shell n_j l_j
+    u32 j = 0;
+    for (auto &shell : params.shells) {
+        u32 N_j = shell.NumberOfElectrons; // Occupation number
+        // Get the index into eigenvector coefficient matrix that correspond to coefficients
+        // for the P_njlj (this shell's) radial function
+        u32 coefficientIndex = physicalIndices[j];
+        auto P_nl = GetRadialFunctionAtCoordinate(r, Bsplines,
+                                                  coefficientIndex,
+                                                  coefficientMatrix); // Radial function at coordinate r
+        auto P_normSquared = shell.radialFunctionIntegratedOverAllSpace;
+        P_nl = P_nl / sqrt(P_normSquared);
+        rho_at_r += prefactor * N_j * P_nl * P_nl / (r * r);
+        ++j;
+    }
+    return rho_at_r;
+};
+
+Complex GetRadialFunctionAtCoordinate(Complex r, Atom::Bsplines &Bsplines, u32 functionIndex,
+                                      const ZMatrix &coefficients) {
+
+    auto return_value = Complex(0.0);
+    // Loop over all bspline coefficients and create superposition
+    // P(r) = sum_i c_i B_i(r)
+    ASSERT(coefficients.numRows() == Bsplines.m_usedBsplineIndices.size());
+    for (u32 i = 0; i < coefficients.numRows(); ++i) {
+        u32 bsplineIndex = Bsplines.m_usedBsplineIndices[i];
+        auto B_i = Bsplines.GetBsplineAtCoordinate(r, bsplineIndex);
+        auto c_i = coefficients(i, functionIndex);
+        return_value += c_i * B_i;
+    }
+
+    return return_value;
+};
+
+void CalculateRadialFunctionNorms(Atom::Bsplines &Bsplines,
+                                  const ZMatrix &coefficientMatrix, const std::vector<u32> &physicalIndices,
+                                  Atom::SystemParameters &params, GaussLegendre::Integration &GLI) {
+
+
+    // Loop over sub shell n_j l_j
+    u32 j = 0;
+    for (auto &shell : params.shells) {
+        // Get the index into eigenvector coefficient matrix that correspond to coefficients
+        // for the P_njlj (this shell's) radial function
+        u32 coefficientIndex = physicalIndices[j];
+        Complex norm = Complex(0.0);
+        for (u32 i = 0; i < Bsplines.m_numBsplines - 1; i++) {
+            // Loop here is so that the last point b will be at i+1, and at the last physical point;
+            // Shift so we don't integrate in ghost points
+            u32 knotIndex = i + Bsplines.m_order - 1;
+
+            Complex a = Bsplines.m_knotPoints[knotIndex];
+            Complex b = Bsplines.m_knotPoints[knotIndex + 1];
+
+            u32 numIntegrationPoints = Bsplines.m_order;
+            auto abscissae = GLI.getShiftedAbscissae(a, b, numIntegrationPoints);
+            ASSERT(abscissae.size() == numIntegrationPoints);
+            auto prefactor = GLI.b_minus_a_half(a, b);
+
+            if (std::abs(prefactor) < 1e-8) {
+                continue;
+            }
+
+            auto pWeights = GLI.getPointerToZWeights(numIntegrationPoints);
+
+            auto term1 = Complex(0.0, 0.0);
+            for (int m = 0; m < numIntegrationPoints; ++m) {
+                auto r = abscissae[m];
+                auto f = GetRadialFunctionAtCoordinate(r, Bsplines,
+                                                       coefficientIndex,
+                                                       coefficientMatrix); // Radial function at coordinate r
+                term1 += prefactor * pWeights[m] * f * f;
+            }
+
+            norm += term1;
+        }
+        shell.radialFunctionIntegratedOverAllSpace = std::abs(norm);
+        ++j;
+    }
+};
+
+void IntegrateChargeDensity(Atom::Bsplines &Bsplines, ZMatrix &coeffs, std::vector<u32> &physicalIndices,
+                            Atom::SystemParameters AtomParameters, GaussLegendre::Integration &GLI) {
+
+    auto ChargeDensityIntegratedOverAllSpace = Complex(0.0);
+    for (u32 i = 0; i < Bsplines.m_numBsplines - 1; i++) {
+        // Loop here is so that the last point b will be at i+1, and at the last physical point;
+        // Shift so we don't integrate in ghost points
+        u32 knotIndex = i + Bsplines.m_order - 1;
+
+        Complex a = Bsplines.m_knotPoints[knotIndex];
+        Complex b = Bsplines.m_knotPoints[knotIndex + 1];
+
+        u32 numIntegrationPoints = Bsplines.m_order;
+        auto abscissae = GLI.getShiftedAbscissae(a, b, numIntegrationPoints);
+        ASSERT(abscissae.size() == numIntegrationPoints);
+        auto prefactor = GLI.b_minus_a_half(a, b);
+        if (std::abs(prefactor) < 1e-8) {
+            continue;
+        }
+        auto pWeights = GLI.getPointerToZWeights(numIntegrationPoints);
+
+        auto term1 = Complex(0.0, 0.0);
+        for (int m = 0; m < numIntegrationPoints; ++m) {
+            auto r = abscissae[m];
+            auto r2 = r * r;
+            auto f = r2 * ChargeDensityAtCoordinate(r, Bsplines, coeffs, physicalIndices, AtomParameters);
+            term1 += prefactor * pWeights[m] * f;
+        }
+        ChargeDensityIntegratedOverAllSpace += g_FourPi * term1;
+    }
+
+    Logger::Trace("4pi integral over all r rho(r)*r^2 dr = (%f, %f). For %s this should equal %i",
+                  ChargeDensityIntegratedOverAllSpace.real(), ChargeDensityIntegratedOverAllSpace.imag(),
+                  AtomParameters.Name.c_str(), AtomParameters.TotalOccupationNumber);
+}
+
+void setupPoissonLHS(Atom::Bsplines &Bsplines, ZMatrix &lhs, GaussLegendre::Integration &GLI) {
+    u32 numCols = lhs.numCols();
+    u32 numRows = lhs.numRows();
+    u32 k = Bsplines.m_order;
+
+    // First we loop over all rows that can be fully "banded", this excludes the first and the last row.
+    ASSERT(Bsplines.m_usedBsplineIndices.size() > 0);
+    for (u32 i = 1; i < numRows-1; i++) {
+        u32 knotPointIndex = i + k - 1; // The first physical point has index 3 in this array, for k = 4.
+        // But in this loop we are actually in the second physical knotpoint.
+        auto r = Bsplines.m_knotPoints[knotPointIndex];
+        u32 bsplineIndex = Bsplines.m_usedBsplineIndices[i-1]; // we take care of the matrix indexing relative to Bspline numbering here.
+        lhs(i, i-1) = bsplineIndex;
+        lhs(i, i) = bsplineIndex + 1;
+        lhs(i, i+1) = bsplineIndex + 2;
+    }
+    // Then we fix the first row:
+    lhs(0,0) = 1;//Bsplines.GetSecondDerivativeAtCoordinate()
+    lhs(0,1) = 2;
+
+    // also the last row. Note here how we are using the _first_ derivative here.
+    auto r_last = Bsplines.m_knotPoints[Bsplines.m_numKnotPoints - k - 1];
+    u32 lastBsplineIndex = Bsplines.numberOfBsplines()-1;
+    lhs(numRows-1, numCols-2) = lastBsplineIndex-1;//Bsplines.GetDerivativeAtCoordinate(r_last, lastBsplineIndex-1);
+    lhs(numRows-1, numCols-1) = lastBsplineIndex;//Bsplines.GetDerivativeAtCoordinate(r_last, lastBsplineIndex);
 }

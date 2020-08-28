@@ -15,5 +15,7 @@ namespace GaussLegendre {
   private:
       std::array<Complex, 6> m_ZAbscissaeSixPoints;
       std::array<Complex, 6> m_ZWeightsSixPoints;
+      std::array<Complex, 4> m_ZAbscissaeFourPoints;
+      std::array<Complex, 4> m_ZWeightsFourPoints;
   };
 }

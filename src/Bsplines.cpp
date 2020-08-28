@@ -3,7 +3,6 @@
 #include "Bsplines.h"
 
 
-
 Atom::Bsplines::Bsplines(u32 numKnotPoints_, u32 bsplineOrder_)
         : m_numKnotPoints(numKnotPoints_),
           m_order(bsplineOrder_),
@@ -24,7 +23,7 @@ void Atom::Bsplines::setupKnotPoints(const std::vector<Complex> &gridPoints, Ato
     u32 offset = numberOfGhostPointsInEachEnd;
 
 
-    if( sequenceType == Atom::knotSequenceType::Linear) {
+    if (sequenceType == Atom::knotSequenceType::Linear) {
         // Linear knot sequence
         {
             // Linear stride
@@ -57,7 +56,7 @@ void Atom::Bsplines::setupKnotPoints(const std::vector<Complex> &gridPoints, Ato
         }
     }
 
-    if( sequenceType == Atom::knotSequenceType::firstPointsCloserThenLinear) {
+    if (sequenceType == Atom::knotSequenceType::firstPointsCloserThenLinear) {
         {
             // set ghost knot points
             for (u32 i = 0; i < numberOfGhostPointsInEachEnd; ++i) {
@@ -75,11 +74,11 @@ void Atom::Bsplines::setupKnotPoints(const std::vector<Complex> &gridPoints, Ato
 
             // Set tighter cluster close to zero
             u32 clusterEndIndex = 12;
-            auto clusterPointDiff = gridPoints[5]-gridPoints[0]/3.0;
+            auto clusterPointDiff = gridPoints[5] - gridPoints[0] / 3.0;
             auto lastKnotPoint = Complex(0.0);
             for (u32 i = 1; i <= clusterEndIndex; i++) {
                 u32 knotPointIndex = i + offset;
-                Complex knotPointValue = gridPoints[0]+clusterPointDiff*((f64)i);
+                Complex knotPointValue = gridPoints[0] + clusterPointDiff * ((f64) i);
                 m_knotPoints[knotPointIndex] = knotPointValue;
                 lastKnotPoint = knotPointValue;
             }
@@ -87,7 +86,7 @@ void Atom::Bsplines::setupKnotPoints(const std::vector<Complex> &gridPoints, Ato
             // find index for lastKnotPoint on grid:
             u32 gridPointIndex = 0;
             for (auto point : gridPoints) {
-                if(point.real() > lastKnotPoint.real()) {
+                if (point.real() > lastKnotPoint.real()) {
                     break;
                 }
                 gridPointIndex += 1;
@@ -95,7 +94,7 @@ void Atom::Bsplines::setupKnotPoints(const std::vector<Complex> &gridPoints, Ato
 //            Logger::Trace("gridPointIndex for lastKnotPoint: %i", gridPointIndex);
 
             u32 numberOfPhysicalPointsAfterCluster = numberOfPhysicalKnotPoints - clusterEndIndex;
-            u32 stride = (u32) (gridPoints.size() - gridPointIndex+1) / (numberOfPhysicalPointsAfterCluster -1);
+            u32 stride = (u32) (gridPoints.size() - gridPointIndex + 1) / (numberOfPhysicalPointsAfterCluster - 1);
             // Set physical knotpoints between cluster and end point
             for (u32 i = 0; i < numberOfPhysicalPointsAfterCluster; ++i) {
                 u32 knotPointIndex = i + offset + clusterEndIndex;
@@ -290,50 +289,145 @@ Complex Atom::Bsplines::GetDerivativeAtCoordinate(Complex coordinate, u32 bsplin
     Complex x = coordinate;
     u32 i = bsplineIndex;
     u32 k = m_order;
-    auto B_i_k_min_1 = GetBsplineAtCoordinate(x, i, k - 1);
-    auto B_i_plus_1_k_min_1 = GetBsplineAtCoordinate(x, i + 1, k - 1);
-    Complex term1 = B_i_k_min_1 / (m_knotPoints[i + k - 1] - m_knotPoints[i]);
-    Complex term2 = B_i_plus_1_k_min_1 / (m_knotPoints[i + k] - m_knotPoints[i + 1]);
-    Complex dB = Complex((f64) (k - 1)) * (term1 - term2);
+    auto dB = GetDerivativeAtCoordinate(x, i, k);
+//    auto B_i_k_min_1 = GetBsplineAtCoordinate(x, i, k - 1);
+//    auto B_i_plus_1_k_min_1 = GetBsplineAtCoordinate(x, i + 1, k - 1);
+//    Complex term1 = B_i_k_min_1 / (m_knotPoints[i + k - 1] - m_knotPoints[i]);
+//    Complex term2 = B_i_plus_1_k_min_1 / (m_knotPoints[i + k] - m_knotPoints[i + 1]);
+//    Complex dB = Complex((f64) (k - 1)) * (term1 - term2);
 
     return dB;
 }
 
-Complex Atom::Bsplines::GetBsplineFirstDerivativeAtCoordinate(Complex coordinate, u32 bsplineIndex) {
-    auto x_real = coordinate.real();
-    auto knotPointsStart_real = m_knotPoints[0].real();
-    auto knotPointsEnd_real = m_knotPoints[m_knotPoints.size() - 1].real();
+Complex Atom::Bsplines::GetDerivativeAtCoordinate(Complex coordinate, u32 bsplineIndex, u32 order) {
+    Complex x = coordinate;
+    u32 i = bsplineIndex;
+    u32 k = order;
+    Complex dB = Complex(0.0);
 
-    bool isCoordinateOutsideGrid = (x_real > knotPointsEnd_real || x_real < knotPointsStart_real);
+    // Check if we're on the grid
+    if (std::abs(x) > std::abs(m_knotPoints[m_numKnotPoints - 1])) {
+        return dB;
+    }
+    if (std::abs(x) < std::abs(m_knotPoints[0])) {
+        return dB;
+    }
 
-    ASSERT(!isCoordinateOutsideGrid);
-
-    // If we're in the last physical point we have special cases for the last
-    // two Bsplines, ie those with bsplineIndex = numBsplines-1, and numBsplines-2.
-    f64 tolerance = 1e-8;
-    if (std::abs(coordinate - m_knotPoints[m_knotPoints.size() - 1]) < tolerance) {
-
-        if (bsplineIndex == m_numBsplines - 1) {
-
-            u32 N = m_knotPoints.size();
-            Complex denominator = Complex(m_knotPoints[N - 1] - m_knotPoints[N - 2]);
-            Complex derivativeAtLastPointForLastBspline = Complex((f64) (m_order - 1)) / denominator;
-
-            return derivativeAtLastPointForLastBspline;
-
-        } else if (bsplineIndex == m_numBsplines - 2) {
-
-            u32 N = m_knotPoints.size();
-            Complex denominator = Complex(m_knotPoints[N - 1] - m_knotPoints[N - 2]);
-            Complex derivativeAtLastPointForSecondToLastBspline = -Complex((f64) (m_order - 1)) / denominator;
-
-            return derivativeAtLastPointForSecondToLastBspline;
-
-        } else {
-
-            return Complex(0.0);
-
+    // Check if we're in the last knotpoint.
+    if (std::abs(x - m_knotPoints[m_numKnotPoints - 1]) < 1e-8) {
+        if (i < m_numBsplines - 2) { // Only the last and second to last Bspline is nonzero in the last knotpoint.
+            return dB;
         }
+        if (i == m_numBsplines - 1) { // If we are in the last Bspline in the last knotpoint the derivative will be
+            dB = Complex((f64) (k - 1)) * Complex(1.0) /
+                 (m_knotPoints[m_numKnotPoints - 1] - m_knotPoints[m_numKnotPoints - 1 - k]);
+            return dB;
+        }
+        if (i == m_numBsplines - 2) { // If we are in the second to last Bspline we get this derivative
+            dB = Complex((f64) (k - 1)) * Complex(-1.0) /
+                 (m_knotPoints[m_numKnotPoints - 1] - m_knotPoints[m_numKnotPoints - 1 - k]);
+            return dB;
+        }
+    }
+
+    u32 left_knotPoint_index = 0;
+    f64 x_real = x.real();
+    for (int t = 0; t < m_numKnotPoints; t++) {
+        if (x_real >= m_knotPoints[t].real()) {
+            left_knotPoint_index = t;
+        }
+    }
+
+    u32 accessIndex = i - left_knotPoint_index + k - 1;
+    if (accessIndex < 0 || accessIndex > k - 1) {
+        // We're not in a bspline that is nonzero on this coordinate. So return zero.
+        return Complex(0.0);
+    }
+
+    bsplvb_Complex(x, left_knotPoint_index, k - 1);
+
+    dB = Complex(0.0);
+    if (accessIndex == 0) {
+        Complex term1 = -m_Sp[accessIndex] / (m_knotPoints[i + k] - m_knotPoints[i + 1]);
+        dB = Complex((f64) (k - 1)) * term1;
+    } else if (accessIndex == k - 1) {
+        Complex term1 = m_Sp[accessIndex - 1] / (m_knotPoints[i + k - 1] - m_knotPoints[i]);
+        dB = Complex((f64) (k - 1)) * term1;
+    } else {
+        Complex term1 = m_Sp[accessIndex - 1] / (m_knotPoints[i + k - 1] - m_knotPoints[i]);
+        Complex term2 = m_Sp[accessIndex] / (m_knotPoints[i + k] - m_knotPoints[i + 1]);
+        dB = Complex((f64) (k - 1)) * (term1 - term2);
+    }
+//    auto B_i_k_min_1 = GetBsplineAtCoordinate(x, i, k - 1);
+//    auto B_i_plus_1_k_min_1 = GetBsplineAtCoordinate(x, i + 1, k - 1);
+//    Complex term1 = B_i_k_min_1 / (m_knotPoints[i + k - 1] - m_knotPoints[i]);
+//    Complex term2 = B_i_plus_1_k_min_1 / (m_knotPoints[i + k] - m_knotPoints[i + 1]);
+//    dB = Complex((f64) (k - 1)) * (term1 - term2);
+
+    return dB;
+}
+
+Complex Atom::Bsplines::GetSecondDerivativeAtCoordinate(Complex coordinate, u32 bsplineIndex) {
+    Complex x = coordinate;
+    u32 i = bsplineIndex;
+    u32 k = m_order;
+
+    auto dB2 = GetSecondDerivativeAtCoordinate(x, i, k);
+
+    return dB2;
+}
+
+Complex Atom::Bsplines::GetSecondDerivativeAtCoordinate(Complex coordinate, u32 bsplineIndex, u32 order) {
+    Complex x = coordinate;
+    u32 i = bsplineIndex;
+    u32 k = order;
+    ASSERT(k > 2); // Else we can't have second derivative.
+
+    Complex dB2 = Complex(0.0);
+
+    // Check if we're on the grid
+    if (std::abs(x) > std::abs(m_knotPoints[m_numKnotPoints - 1])) {
+        return dB2;
+    }
+    if (std::abs(x) < std::abs(m_knotPoints[0])) {
+        return dB2;
+    }
+
+    auto prefactor = Complex((f64) (k - 1) * (k - 2));
+
+    u32 np = m_numKnotPoints - 1; // Last knotpoint index, to match with fortran bder2 style.
+    // Check if we're in the last knotpoint.
+    if (std::abs(x - m_knotPoints[m_numKnotPoints - 1]) < 1e-8) {
+
+        if (i < m_numBsplines - 3) { // Only the last,second and third to last Bspline is nonzero in the last knotpoint.
+            return dB2;
+        }
+
+        if (i == m_numBsplines - 1) { // If we are in the last Bspline in the last knotpoint the derivative will be
+            auto denominator =
+                    (m_knotPoints[np - 1] - m_knotPoints[np - k]) * (m_knotPoints[np - 2] - m_knotPoints[np - k]);
+            dB2 = prefactor * Complex(1.0) / denominator;
+            return dB2;
+        }
+
+        if (i == m_numBsplines - 2) { // if we are in the second to last Bspline we get this
+            auto denominator1 =
+                    (m_knotPoints[np - 2] - m_knotPoints[np - k - 1]) * (m_knotPoints[np - 2] - m_knotPoints[np - k]);
+            auto term1 = prefactor * Complex(1.0) / denominator1;
+            auto denominator2 =
+                    (m_knotPoints[np - 1] - m_knotPoints[np - k]) * (m_knotPoints[np - 2] - m_knotPoints[np - k]);
+            auto term2 = prefactor * Complex(1.0) / denominator2;
+            dB2 = -term1 - term2;
+            return dB2;
+        }
+
+        if (i == m_numBsplines - 3) { // If we are in the third to last Bspline we get this derivative
+            auto denominator =
+                    (m_knotPoints[np - 1] - m_knotPoints[np - k - 1]) * (m_knotPoints[np - 2] - m_knotPoints[np - k]);
+            dB2 = prefactor * Complex(1.0) / denominator;
+            return dB2;
+        }
+
 
     }
 
@@ -341,50 +435,70 @@ Complex Atom::Bsplines::GetBsplineFirstDerivativeAtCoordinate(Complex coordinate
     // m_knotPoints[left_knotPoint_index].real() < coordinate.real() m_knotPoints[left_knotPoint_index+1].real()
     u32 left_knotPoint_index = 0;
     for (int t = 0; t < m_numKnotPoints; t++) {
-        if (x_real >= m_knotPoints[t].real()) {
+        if (x.real() >= m_knotPoints[t].real()) {
             left_knotPoint_index = t;
         }
     }
 
-    u32 accessIndex = bsplineIndex - left_knotPoint_index + m_order - 1;
-    if (accessIndex < 0 || accessIndex > m_Sp.size() - 1) {
-        return Complex(0.0, 0.0);
+    u32 accessIndex = i - left_knotPoint_index + k - 1;
+    if (accessIndex < 0 || accessIndex > k - 1) {
+        // We're not in a bspline that is nonzero on this coordinate. So return zero.
+        return Complex(0.0);
     }
 
-    // Get the Bsplines from bsplvb. If accessIndex = i, and m_order = k,
-    // we have the following from fortran bder comments:
-    //    *     index=left-kord+i => i=index-left+kord  for Sp with k=kord
-    //    *     index=left-kord+i+1 => i=index-left+kord-1  for Sp with k=kord-1
-    //    *     Sp(i-1,k-1) gives the same index as Sp(i,k)
-    //    *     Sp(i,k-1) gives the same index as Sp(i+1.k)
+    bsplvb_Complex(x, left_knotPoint_index, k - 2);
 
-    // Calculate non-zero Bsplines on the coordinate.
-    bsplvb_Complex(coordinate, left_knotPoint_index, m_order - 1);
-
-    Complex derivative = Complex(0.0);
-    if (accessIndex == 0) {
-        Complex denominator = m_knotPoints[bsplineIndex + m_order - 1] - m_knotPoints[bsplineIndex + 1];
-        Complex prefactor = -Complex((f64) (m_order - 1));
-        derivative = prefactor * m_Sp[accessIndex] / denominator;
-    } else if (accessIndex == m_order - 1) {
-        Complex denominator = m_knotPoints[bsplineIndex + m_order - 2] - m_knotPoints[bsplineIndex];
-        Complex prefactor = Complex((f64) (m_order - 1));
-        derivative = prefactor * m_Sp[accessIndex - 1] / denominator;
-    } else {
-        Complex denominator1 = m_knotPoints[bsplineIndex + m_order - 2] - m_knotPoints[bsplineIndex];
-        Complex denominator2 = m_knotPoints[bsplineIndex + m_order - 1] - m_knotPoints[bsplineIndex + 1];
-        Complex prefactor = Complex((f64) (m_order - 1));
-        derivative = prefactor * (
-                (m_Sp[accessIndex - 1] / denominator1) - (m_Sp[accessIndex] / denominator2)
-        );
+    dB2 = Complex(0.0);
+    if (accessIndex > 1) {
+        auto denominator = (m_knotPoints[i + k - 2] - m_knotPoints[i]) * (m_knotPoints[i + k - 1] - m_knotPoints[i]);
+        dB2 += prefactor * m_Sp[accessIndex - 2] / denominator;
     }
+    if (accessIndex > 0 && accessIndex < k - 1) {
+        auto denominator1 =
+                (m_knotPoints[i + k - 1] - m_knotPoints[i + 1]) * (m_knotPoints[i + k - 1] - m_knotPoints[i]);
+        auto term1 = prefactor * m_Sp[accessIndex - 1] / denominator1;
+        auto denominator2 =
+                (m_knotPoints[i + k - 1] - m_knotPoints[i + 1]) * (m_knotPoints[i + k] - m_knotPoints[i + 1]);
+        auto term2 = prefactor * m_Sp[accessIndex - 1] / denominator2;
+        dB2 += - term1 - term2;
+    }
+    if (accessIndex < k - 2) {
+        auto denominator = (m_knotPoints[i + k] - m_knotPoints[i + 2]) * (m_knotPoints[i + k] - m_knotPoints[i + 1]);
+        dB2 += prefactor * m_Sp[accessIndex] / denominator;
+    }
+//    auto B_i_k_min_1 = GetDerivativeAtCoordinate(x, i, k - 1);
+//    auto B_i_plus_1_k_min_1 = GetDerivativeAtCoordinate(x, i + 1, k - 1);
+//    Complex term1 = B_i_k_min_1 / (m_knotPoints[i + k - 1] - m_knotPoints[i]);
+//    Complex term2 = B_i_plus_1_k_min_1 / (m_knotPoints[i + k] - m_knotPoints[i + 1]);
+//    Complex dB = Complex((f64) (k - 1)) * (term1 - term2);
 
-
-    return derivative;
+    return dB2;
+//    Complex x = coordinate;
+//    u32 i = bsplineIndex;
+//    u32 k = m_order;
+//    auto B_i_k_min_2 = GetBsplineAtCoordinate(x, i, k - 2);
+//    auto B_i_plus_1_k_min_2 = GetBsplineAtCoordinate(x, i + 1, k - 2);
+//    auto B_i_plus_2_k_min_2 = GetBsplineAtCoordinate(x, i + 2, k - 2);
+//
+//    f64 kk = (f64) k;
+//    if(i > 2) {
+//        Complex term1 =
+//                B_i_k_min_2 /
+//                ((m_knotPoints[i + k - 1] - m_knotPoints[i]) * (m_knotPoints[i + k - 2] - m_knotPoints[i]));
+//    }
+//    Complex term2 = B_i_plus_1_k_min_2 /
+//                    ((m_knotPoints[i + k - 1] - m_knotPoints[i]) * (m_knotPoints[i + k - 1] - m_knotPoints[i + 1]));
+//    Complex term3 = B_i_plus_1_k_min_2 /
+//                    ((m_knotPoints[i + k] - m_knotPoints[i + 1]) * (m_knotPoints[i + k - 1] - m_knotPoints[i + 1]));
+//    Complex term4 = B_i_plus_2_k_min_2 /
+//                    ((m_knotPoints[i + k] - m_knotPoints[i + 1]) * (m_knotPoints[i + k] - m_knotPoints[i + 2]));
+//    Complex dB2 = (kk - 1) * (kk - 2) * (term1 - term2 - term3 + term4);
+//
+//    return dB2;
 }
 
 void Atom::Bsplines::SetBoundaryConditionBsplineIndices(std::vector<u32> &indices) {
-    for(auto index : indices) {
+    for (auto index : indices) {
         m_usedBsplineIndices.push_back(index);
     }
 }
