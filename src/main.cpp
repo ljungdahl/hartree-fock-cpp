@@ -108,7 +108,7 @@ void TestBsplineDerivatives(Atom::Bsplines &Bsplines, Atom::Grid &Grid) {
 
     std::vector<u32> orders = {0, 1, 2};
 
-    u32 bsplineIndex = Bsplines.m_usedBsplineIndices[Bsplines.m_usedBsplineIndices.size()-1];
+    u32 bsplineIndex = Bsplines.m_usedBsplineIndices[Bsplines.m_usedBsplineIndices.size() - 1];
     for (auto order : orders) {
         u32 derivOrder = order;
         ZVector basisFunction;
@@ -136,7 +136,7 @@ int main() {
 
     // Atomic units. Let's do a 10 Bohr radii sized grid.
     constexpr u32 numGridPoints = 1000;
-    constexpr f64 gridStart = 0.0, gridEnd = 60.0;
+    constexpr f64 gridStart = 0.0, gridEnd = 10.0;
     Atom::Grid Grid = Atom::Grid(numGridPoints, gridStart, gridEnd);
     writeGridToFile(Grid.getGridPoints());
 
@@ -259,7 +259,7 @@ int main() {
     // Here we use collocation method with a different bspline order, but with a lot more knotpts to get
     // a good representation of the potential.
     constexpr u32 poissonBsplineOrder = 4;
-    constexpr u32 poissonNumKnotPoints = 16; // So many knotpoints for this?
+    constexpr u32 poissonNumKnotPoints = 200; // So many knotpoints for this?
     ASSERT(numGridPoints > numKnotPoints);
     Atom::Bsplines poissonBsplines = Atom::Bsplines(poissonNumKnotPoints, poissonBsplineOrder);
     poissonBsplines.setupKnotPoints(Grid.getGridPoints(), Atom::knotSequenceType::Linear);
@@ -283,7 +283,7 @@ int main() {
         poissonBsplineIndices.push_back(i);
     }
     poissonBsplines.SetBoundaryConditionBsplineIndices(poissonBsplineIndices);
-    TestBsplineDerivatives(poissonBsplines, Grid);
+//    TestBsplineDerivatives(poissonBsplines, Grid);
 
     // We have N-k unknowns (the c_n coeffiecients, one for each Bspline), but only really N-k-2 equations.
     // If we use that c_0 = 0 we have N-k-1 unknowns, but still not enough equations. We can add an equation then for
@@ -292,11 +292,23 @@ int main() {
     ZMatrix poissonLHS = ZMatrix(poissonDimension, poissonDimension);
     setupPoissonLHS(poissonBsplines, poissonLHS, GaussLegendreIntegration);
     Logger::Trace("Dimension for poisson equation LHS matrix: %i", poissonDimension);
-    for (u32 i = 0; i < poissonDimension; i++) {
-        for (u32 j = 0; j < poissonDimension; j++) {
-            printf("%f ", poissonLHS(i, j).real());
-        }
-        printf("\n");
+//    for (u32 i = 0; i < poissonDimension; i++) {
+//        for (u32 j = 0; j < poissonDimension; j++) {
+//            printf("%f ", poissonLHS(i, j).real());
+//        }
+//        printf("\n");
+//    }
+
+// Setup the RHS for the poisson equation. This will be the -4\pi*rho(r), where rho(r) is the charge density we get
+// from the eigenvalue equation. It is evaluated in every knotpoint, except in the last index where it is zero.
+    ZVector poissonRHS;
+    poissonRHS.resize(poissonDimension, Complex(0.0));
+    for(u32 i = 0; i < poissonDimension-1; i++) {
+        u32 k = poissonBsplines.m_order;
+        Complex r = poissonBsplines.m_knotPoints[i+(k-1)]; // physical knotpoints.
+        auto rho = ChargeDensityAtCoordinate(r, Bsplines, gevp_Eigenvectors, physicalIndices, AtomParameters);
+        poissonRHS[i] = -r*g_FourPi*rho;
+        Logger::Trace("poissonRHS[%i]: (%f, %f)",i, poissonRHS[i].real(), poissonRHS[i].imag());
     }
 
     return 0;
@@ -432,9 +444,12 @@ Complex ChargeDensityAtCoordinate(Complex r, Atom::Bsplines &Bsplines,
         auto P_nl = GetRadialFunctionAtCoordinate(r, Bsplines,
                                                   coefficientIndex,
                                                   coefficientMatrix); // Radial function at coordinate r
+
         auto P_normSquared = shell.radialFunctionIntegratedOverAllSpace;
         P_nl = P_nl / sqrt(P_normSquared);
+//        Logger::Trace("P_%i = (%f, %f)", coefficientIndex, P_nl.real(), P_nl.imag());
         rho_at_r += prefactor * N_j * P_nl * P_nl / (r * r);
+//        Logger::Trace("rho_at_r: (%f, %f)", rho_at_r.real(), rho_at_r.imag());
         ++j;
     }
     return rho_at_r;
@@ -498,6 +513,7 @@ void CalculateRadialFunctionNorms(Atom::Bsplines &Bsplines,
             }
 
             norm += term1;
+
         }
         shell.radialFunctionIntegratedOverAllSpace = std::abs(norm);
         ++j;
@@ -533,6 +549,7 @@ void IntegrateChargeDensity(Atom::Bsplines &Bsplines, ZMatrix &coeffs, std::vect
             term1 += prefactor * pWeights[m] * f;
         }
         ChargeDensityIntegratedOverAllSpace += g_FourPi * term1;
+//        Logger::Trace("ChargeDensityIntegratedOverAllSpace: %f", ChargeDensityIntegratedOverAllSpace.real());
     }
 
     Logger::Trace("4pi integral over all r rho(r)*r^2 dr = (%f, %f). For %s this should equal %i",
@@ -547,25 +564,28 @@ void setupPoissonLHS(Atom::Bsplines &Bsplines, ZMatrix &lhs, GaussLegendre::Inte
 
     // First we loop over all rows that can be fully "banded", this excludes the first and the last row.
     ASSERT(Bsplines.m_usedBsplineIndices.size() > 0);
-    for (u32 i = 1; i < numRows-1; i++) {
+    for (u32 i = 1; i < numRows - 1; i++) {
         u32 knotPointIndex = i + k - 1; // The first physical point has index 3 in this array, for k = 4.
         // But in this loop we are actually in the second physical knotpoint.
         auto r = Bsplines.m_knotPoints[knotPointIndex];
-        u32 bsplineIndex = Bsplines.m_usedBsplineIndices[i-1]; // we take care of the matrix indexing relative to Bspline numbering here.
-        lhs(i, i-1) = Bsplines.GetSecondDerivativeAtCoordinate(r, bsplineIndex);//bsplineIndex;
+        u32 bsplineIndex = Bsplines.m_usedBsplineIndices[i -
+                                                         1]; // we take care of the matrix indexing relative to Bspline numbering here.
+        lhs(i, i - 1) = Bsplines.GetSecondDerivativeAtCoordinate(r, bsplineIndex);//bsplineIndex;
         lhs(i, i) = Bsplines.GetSecondDerivativeAtCoordinate(r, bsplineIndex + 1);//bsplineIndex + 1;
-        lhs(i, i+1) = Bsplines.GetSecondDerivativeAtCoordinate(r, bsplineIndex + 2);
+        lhs(i, i + 1) = Bsplines.GetSecondDerivativeAtCoordinate(r, bsplineIndex + 2);
     }
     // Then we fix the first row:
-    auto r_first = Bsplines.m_knotPoints[k-1];
-    lhs(0,0) = Bsplines.GetSecondDerivativeAtCoordinate(r_first, 1);
-    lhs(0,1) = Bsplines.GetSecondDerivativeAtCoordinate(r_first, 2);
+    auto r_first = Bsplines.m_knotPoints[k - 1];
+    lhs(0, 0) = Bsplines.GetSecondDerivativeAtCoordinate(r_first, 1);
+    lhs(0, 1) = Bsplines.GetSecondDerivativeAtCoordinate(r_first, 2);
 
     // also the last row. Note here how we are using the _first_ derivative here.
-    auto r_last = Bsplines.m_knotPoints[Bsplines.m_numKnotPoints -(k-1)-1];
-    u32 lastBsplineIndex = Bsplines.m_usedBsplineIndices[Bsplines.m_usedBsplineIndices.size()-1];
-    Logger::Trace("lastBsplineIndex: %i",lastBsplineIndex);
+    auto r_last = Bsplines.m_knotPoints[Bsplines.m_numKnotPoints - (k - 1) - 1];
+    u32 lastBsplineIndex = Bsplines.m_usedBsplineIndices[Bsplines.m_usedBsplineIndices.size() - 1];
+    Logger::Trace("lastBsplineIndex: %i", lastBsplineIndex);
     Logger::Trace("numBsplines (poisson):, %i", Bsplines.numberOfBsplines());
-    lhs(numRows-1, numCols-2) = Bsplines.GetDerivativeAtCoordinate(r_last, lastBsplineIndex-1);//Bsplines.GetDerivativeAtCoordinate(r_last, lastBsplineIndex-1);
-    lhs(numRows-1, numCols-1) = Bsplines.GetDerivativeAtCoordinate(r_last, lastBsplineIndex);//Bsplines.GetDerivativeAtCoordinate(r_last, lastBsplineIndex);
+    lhs(numRows - 1, numCols - 2) = Bsplines.GetDerivativeAtCoordinate(r_last, lastBsplineIndex -
+                                                                               1);//Bsplines.GetDerivativeAtCoordinate(r_last, lastBsplineIndex-1);
+    lhs(numRows - 1, numCols - 1) = Bsplines.GetDerivativeAtCoordinate(r_last,
+                                                                       lastBsplineIndex);//Bsplines.GetDerivativeAtCoordinate(r_last, lastBsplineIndex);
 }

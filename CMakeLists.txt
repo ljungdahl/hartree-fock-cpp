@@ -55,7 +55,7 @@ add_executable(${PROJECT_NAME}
         src/FileIO.cpp
         src/Matrix.cpp
         src/GaussLegendre.cpp
-        src/Eigenproblems.cpp)
+        src/Eigenproblems.cpp src/LinearEquations.cpp src/LinearEquations.h src/LapackCommon.h)
 
 if (UNIX)
     # Single Dynamic Link library used on my Arch Linu machine!
