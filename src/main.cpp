@@ -108,7 +108,7 @@ void TestBsplineDerivatives(Atom::Bsplines &Bsplines, Atom::Grid &Grid) {
 
     std::vector<u32> orders = {0, 1, 2};
 
-    u32 bsplineIndex = 7;
+    u32 bsplineIndex = Bsplines.m_usedBsplineIndices[Bsplines.m_usedBsplineIndices.size()-1];
     for (auto order : orders) {
         u32 derivOrder = order;
         ZVector basisFunction;
@@ -123,8 +123,7 @@ void TestBsplineDerivatives(Atom::Bsplines &Bsplines, Atom::Grid &Grid) {
             }
             if (derivOrder == 2) {
                 val = Bsplines.GetSecondDerivativeAtCoordinate(r, bsplineIndex);
-                Logger::Trace("second derivative for bspl #%i: (%f, %f)", bsplineIndex, val.real(), val.imag());
-
+//                Logger::Trace("second derivative for bspl #%i: (%f, %f)", bsplineIndex, val.real(), val.imag());
             }
             basisFunction.push_back(val);
         }
@@ -266,7 +265,7 @@ int main() {
     poissonBsplines.setupKnotPoints(Grid.getGridPoints(), Atom::knotSequenceType::Linear);
     writeKnotPointsToFile(poissonBsplines.m_knotPoints);
 
-    TestBsplineDerivatives(poissonBsplines, Grid);
+
 
     // For the poisson equation we say that at the origin everyting is zero, so we skip the first bspline;
     // the one with index zero.
@@ -283,7 +282,8 @@ int main() {
     for (u32 i = 1; i < poissonBsplines.numberOfBsplines(); i++) {
         poissonBsplineIndices.push_back(i);
     }
-    poissonBsplines.SetBoundaryConditionBsplineIndices(bsplineIndices);
+    poissonBsplines.SetBoundaryConditionBsplineIndices(poissonBsplineIndices);
+    TestBsplineDerivatives(poissonBsplines, Grid);
 
     // We have N-k unknowns (the c_n coeffiecients, one for each Bspline), but only really N-k-2 equations.
     // If we use that c_0 = 0 we have N-k-1 unknowns, but still not enough equations. We can add an equation then for
@@ -552,17 +552,20 @@ void setupPoissonLHS(Atom::Bsplines &Bsplines, ZMatrix &lhs, GaussLegendre::Inte
         // But in this loop we are actually in the second physical knotpoint.
         auto r = Bsplines.m_knotPoints[knotPointIndex];
         u32 bsplineIndex = Bsplines.m_usedBsplineIndices[i-1]; // we take care of the matrix indexing relative to Bspline numbering here.
-        lhs(i, i-1) = bsplineIndex;
-        lhs(i, i) = bsplineIndex + 1;
-        lhs(i, i+1) = bsplineIndex + 2;
+        lhs(i, i-1) = Bsplines.GetSecondDerivativeAtCoordinate(r, bsplineIndex);//bsplineIndex;
+        lhs(i, i) = Bsplines.GetSecondDerivativeAtCoordinate(r, bsplineIndex + 1);//bsplineIndex + 1;
+        lhs(i, i+1) = Bsplines.GetSecondDerivativeAtCoordinate(r, bsplineIndex + 2);
     }
     // Then we fix the first row:
-    lhs(0,0) = 1;//Bsplines.GetSecondDerivativeAtCoordinate()
-    lhs(0,1) = 2;
+    auto r_first = Bsplines.m_knotPoints[k-1];
+    lhs(0,0) = Bsplines.GetSecondDerivativeAtCoordinate(r_first, 1);
+    lhs(0,1) = Bsplines.GetSecondDerivativeAtCoordinate(r_first, 2);
 
     // also the last row. Note here how we are using the _first_ derivative here.
-    auto r_last = Bsplines.m_knotPoints[Bsplines.m_numKnotPoints - k - 1];
-    u32 lastBsplineIndex = Bsplines.numberOfBsplines()-1;
-    lhs(numRows-1, numCols-2) = lastBsplineIndex-1;//Bsplines.GetDerivativeAtCoordinate(r_last, lastBsplineIndex-1);
-    lhs(numRows-1, numCols-1) = lastBsplineIndex;//Bsplines.GetDerivativeAtCoordinate(r_last, lastBsplineIndex);
+    auto r_last = Bsplines.m_knotPoints[Bsplines.m_numKnotPoints -(k-1)-1];
+    u32 lastBsplineIndex = Bsplines.m_usedBsplineIndices[Bsplines.m_usedBsplineIndices.size()-1];
+    Logger::Trace("lastBsplineIndex: %i",lastBsplineIndex);
+    Logger::Trace("numBsplines (poisson):, %i", Bsplines.numberOfBsplines());
+    lhs(numRows-1, numCols-2) = Bsplines.GetDerivativeAtCoordinate(r_last, lastBsplineIndex-1);//Bsplines.GetDerivativeAtCoordinate(r_last, lastBsplineIndex-1);
+    lhs(numRows-1, numCols-1) = Bsplines.GetDerivativeAtCoordinate(r_last, lastBsplineIndex);//Bsplines.GetDerivativeAtCoordinate(r_last, lastBsplineIndex);
 }

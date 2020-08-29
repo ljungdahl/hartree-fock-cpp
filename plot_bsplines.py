@@ -25,10 +25,14 @@ B7 = np.loadtxt("dat/B_7.dat")
 dB7 = np.loadtxt("dat/dB_7.dat")
 d2B7= np.loadtxt("dat/dB2_7.dat")
 
+B11 = np.loadtxt("dat/B_11.dat")
+dB11 = np.loadtxt("dat/dB_11.dat")
+d2B11= np.loadtxt("dat/dB2_11.dat")
+
 Bsplines = []
-Bsplines.append(B7)
-Bsplines.append(dB7)
-Bsplines.append(d2B7)
+Bsplines.append(B11)
+Bsplines.append(dB11)
+Bsplines.append(d2B11)
 
 plt.figure(1)
 

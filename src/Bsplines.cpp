@@ -321,6 +321,7 @@ Complex Atom::Bsplines::GetDerivativeAtCoordinate(Complex coordinate, u32 bsplin
         if (i == m_numBsplines - 1) { // If we are in the last Bspline in the last knotpoint the derivative will be
             dB = Complex((f64) (k - 1)) * Complex(1.0) /
                  (m_knotPoints[m_numKnotPoints - 1] - m_knotPoints[m_numKnotPoints - 1 - k]);
+//            Logger::Trace("LAst bspline in last knotpoint!");
             return dB;
         }
         if (i == m_numBsplines - 2) { // If we are in the second to last Bspline we get this derivative
