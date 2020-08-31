@@ -4,6 +4,7 @@
 
 #include <vector>
 
+#include "Vector.h"
 #include "Matrix.h"
 
 #define MKL_Complex16 std::complex<double>
@@ -17,6 +18,7 @@ ASSERT(expr == 0); \
 }
 
 typedef LA::Matrix<Complex> ZMatrix;
+typedef LA::Vector<Complex> ZVector;
 
 namespace LAPACK {
 

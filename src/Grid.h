@@ -4,6 +4,8 @@
 #include "logger.h"
 #include "typedefs.h"
 
+typedef std::vector<Complex> ZVector;
+
 namespace Atom {
 
     class Grid {

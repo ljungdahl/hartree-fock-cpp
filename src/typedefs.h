@@ -24,5 +24,3 @@ typedef double f64;
 typedef float f32;
 
 typedef std::complex<f64> Complex;
-typedef std::vector<Complex> ZVector;
-typedef std::vector<f64> DVector;

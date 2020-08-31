@@ -21,23 +21,6 @@ std::vector<u32> sortZVectorIndices(const ZVector &v) {
     return indices;
 }
 
-std::vector<u32> sortDVectorIndices(const DVector &v) {
-    std::vector<u32> indices(v.size());
-    std::iota(indices.begin(), indices.end(), 0); // Fills indices with integers from 0 to v.size()-1
-
-    // sort indexes based on comparing values in v
-    // using std::stable_sort instead of std::sort
-    // to avoid unnecessary index re-orderings
-    // when v contains elements of equal values
-    std::stable_sort(indices.begin(), indices.end(),
-                     [&v](u32 i, u32 j) {
-                         f64 a = v[i];
-                         f64 b = v[j];
-                         return a < b || a == b;
-                     });
-    return indices;
-}
-
 LAPACK::Eigenproblems::Eigenproblems() {
 }
 
@@ -49,7 +32,7 @@ void LAPACK::Eigenproblems::GeneralisedComplexSolver(LAPACK::EigenParameters par
 //TODO(anton): Also implement left eigenvectors, currently only working for right eigenvectors as written above.
 
     u32 n = params.squareMatrixOrder;
-    ASSERT(n * n == A_Matrix.TotalSize() && n * n == B_Matrix.TotalSize());
+    ASSERT(n * n == A_Matrix.totalSize() && n * n == B_Matrix.totalSize());
     u32 leadingDimension_A = n, leadingDimension_B = n;
     u32 leadingDimRightEigvec = n;
     u32 leadingDimLeftEigvec = 1; // NOTE(anton): currently only right eigvecs supported here.
@@ -68,11 +51,11 @@ void LAPACK::Eigenproblems::GeneralisedComplexSolver(LAPACK::EigenParameters par
     // nice things for the copy operation.
     ZVector temp_A; //
     temp_A.resize(n * n);
-    A_Matrix.copyToVector(temp_A);
+    A_Matrix.copyToVector(temp_A.data());
 
     ZVector temp_B;
     temp_B.resize(n * n);
-    B_Matrix.copyToVector(temp_B);
+    B_Matrix.copyToVector(temp_B.data());
 
     // The generalised eigenvalue is a ratio E = alpha / beta, and what we get back from zggev are arrays
     // with the n values alpha and beta.
@@ -90,11 +73,11 @@ void LAPACK::Eigenproblems::GeneralisedComplexSolver(LAPACK::EigenParameters par
 
     LAPACK_CHECK(
             LAPACKE_zggev3(layout, computeLeft, computeRight, n,
-                          temp_A.data(), leadingDimension_A,
-                          temp_B.data(), leadingDimension_B,
-                          alpha.data(), beta.data(),
-                          leftEigVecs.data(), leadingDimLeftEigvec,
-                          rightEigVecs.data(), leadingDimRightEigvec)
+                          temp_A.dataPtr(), leadingDimension_A,
+                          temp_B.dataPtr(), leadingDimension_B,
+                          alpha.dataPtr(), beta.dataPtr(),
+                          leftEigVecs.dataPtr(), leadingDimLeftEigvec,
+                          rightEigVecs.dataPtr(), leadingDimRightEigvec)
     );
 
     Logger::Log(
@@ -157,19 +140,5 @@ void LAPACK::Eigenproblems::GeneralisedComplexSolver(LAPACK::EigenParameters par
             out_eigenvectors(i, j) = rightEigVecs[i * ldvr + unsorted_index];
         }
     }
-
-    // Normalize YES/NO???
-//    for (int j = 0; j < out_eigenvectors.numCols(); j++) {
-//        f64 magnitudeSquared = 0.0;
-//        for (int i = 0; i < out_eigenvectors.numRows(); i++) {
-//            auto abs_val = std::abs(out_eigenvectors(i,j));
-//            magnitudeSquared += abs_val*abs_val; // |x_ij|^2
-//        }
-//        f64 magnitude = sqrt(magnitudeSquared);
-//        for (int i = 0; i < out_eigenvectors.numRows(); i++) {
-//            auto val = out_eigenvectors(i,j);
-//            out_eigenvectors(i,j) = val/magnitude;
-//        }
-//    }
 
 }
