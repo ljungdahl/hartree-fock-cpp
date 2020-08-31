@@ -3,7 +3,6 @@
 #include "typedefs.h"
 #include "linear_algebra_typedefs.h" // Matrix, Vector
 
-
 namespace Atom {
 
 class HartreeFock {

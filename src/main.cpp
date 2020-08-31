@@ -6,23 +6,39 @@
 
 #include "typedefs.h"
 #include "logger.h"
+#include "custom_asserts.h"
+
 #include "Vector.h"
+#include "Grid.h"
+#include "Bsplines.h"
+#include "HartreeFock.h"
 
 typedef LA::Vector<Complex> Vector;
 
 
 int main(int argc, char* argv[]) {
-    Vector vec = Vector(4);
+// Atomic units. Let's do a 10 Bohr radii sized grid.
+    constexpr u32 numGridPoints = 1000;
+    constexpr f64 gridStart = 0.0, gridEnd = 10.0;
+    Atom::Grid Grid = Atom::Grid(numGridPoints, gridStart, gridEnd);
 
-    u32 i = 0;
-    for (auto& el : vec.data()) {
-        el = Complex(i);
-        i++;
-    }
+    constexpr u32 bsplineOrder = 6;
+    constexpr u32 numKnotPoints = 80;
+    ASSERT(numGridPoints > numKnotPoints);
+    Atom::Bsplines Bsplines = Atom::Bsplines(numKnotPoints, bsplineOrder);
 
-    for (auto el : vec.data()) {
-        Logger::Trace("(%f, %f)", el.real(), el.imag());
-    }
+    Bsplines.setupKnotPoints(Grid.getGridPoints(), Atom::knotSequenceType::Linear);
+
+    // TODO(anton): The hf instantiation should take parameters so that
+    // arrays with all relevant data can be allocated and initialised.
+    Atom::HartreeFock hf = Atom::HartreeFock();
+
+
+    // The starting point for the HF solver will be just the independent particle
+    // model without any electron-electron interaction.
+    hf.PerformInitialStep();
+
+    hf.SelfConsistentSolution();
 
     return 0;
 }

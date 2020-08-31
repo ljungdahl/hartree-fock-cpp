@@ -134,7 +134,7 @@ int OldMain() {
 
     // Atomic units. Let's do a 10 Bohr radii sized grid.
     constexpr u32 numGridPoints = 1000;
-    constexpr f64 gridStart = 0.0, gridEnd = 60.0;
+    constexpr f64 gridStart = 0.0, gridEnd = 10.0;
     Atom::Grid Grid = Atom::Grid(numGridPoints, gridStart, gridEnd);
     writeGridToFile(Grid.getGridPoints());
 
