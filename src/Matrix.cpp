@@ -22,6 +22,14 @@ LA::Matrix<T>::Matrix(u32 rows, u32 cols)
 }
 
 template<class T>
+LA::Matrix<T>::Matrix()
+        : m_rows(0),
+          m_cols(0),
+          m_data(0) {
+}
+
+
+template<class T>
 void LA::Matrix<T>::zero() {
     std::fill(m_data.begin(), m_data.end(), T());
 }
@@ -64,4 +72,14 @@ u32 LA::Matrix<T>::numRows() const {
 template<class T>
 u32 LA::Matrix<T>::numCols() const {
     return m_cols;
+}
+
+template<class T>
+void LA::Matrix<T>::resize(u32 rows, u32 cols) {
+    if(m_data.size() > 0) {
+        m_data.clear();
+    }
+    m_data.resize(rows*cols, T());
+    m_rows = rows;
+    m_cols = cols;
 }

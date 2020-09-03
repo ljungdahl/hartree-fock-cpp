@@ -13,6 +13,8 @@ Atom::Bsplines::Bsplines(u32 numKnotPoints_, u32 bsplineOrder_)
     m_bsplvb_dL.resize(m_order, Complex(0.0));
     m_bsplvb_dR.resize(m_order, Complex(0.0));
     m_Sp.resize(m_order, Complex(0.0));
+
+
 }
 
 void Atom::Bsplines::setupKnotPoints(const std::vector<Complex> &gridPoints, Atom::knotSequenceType sequenceType) {
@@ -504,6 +506,20 @@ void Atom::Bsplines::SetBoundaryConditionBsplineIndices(std::vector<u32> &indice
     }
 }
 
+
+void Atom::SetupUsedBsplineIndicesFromBoundaryConditions(Atom::Bsplines &bsplines) {
+    // Boundary conditions are \Psi(r = 0) = 0, and \Psi(r = \infty) = 0,
+    // so we don't use the first and last Bsplines.
+    // This gives numKnotPoints-bsplineOrder-2 Bsplines in total.
+    // We make an array with the relevant bspline indices for ease of access.
+    std::vector<u32> bsplineIndices;
+    // Note that I am using zero indexing for Bspline, ie the first Bspline has index 0,
+    // and the last Bspline has index numBsplines-1.
+    for (u32 i = 1; i <= bsplines.m_numKnotPoints - bsplines.m_order - 2; i++) {
+        bsplineIndices.push_back(i);
+    }
+    bsplines.SetBoundaryConditionBsplineIndices(bsplineIndices);
+}
 
 // de Boor's bsplvb for reference.
 /*

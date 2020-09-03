@@ -23,3 +23,7 @@ void Atom::HartreeFock::PerformInitialStep() {
 
 
 }
+
+void Atom::HartreeFock::SelfConsistentSolution() {
+
+}

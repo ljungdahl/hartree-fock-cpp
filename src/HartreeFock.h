@@ -10,6 +10,7 @@ public:
 HartreeFock();
 
 void PerformInitialStep();
+void SelfConsistentSolution();
 };
 
 }

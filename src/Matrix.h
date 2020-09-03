@@ -12,6 +12,7 @@ namespace LA {
     class Matrix {
     public:
 
+        Matrix();
         Matrix(u32 rows, u32 cols);
 
         void zero();
@@ -28,6 +29,7 @@ namespace LA {
         u32 numRows() const;
         u32 numCols() const;
 
+        void resize(u32 rows, u32 cols);
     private:
         u32 m_rows, m_cols;
         std::vector<T> m_data;

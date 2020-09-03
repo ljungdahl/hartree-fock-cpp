@@ -39,6 +39,7 @@ namespace Atom {
         void bsplvb_Complex(Complex coordinate, u32 left, u32 k_order); // For derivative calculations
     };
 
+    void SetupUsedBsplineIndicesFromBoundaryConditions(Atom::Bsplines& bsplines);
 }
 
 
