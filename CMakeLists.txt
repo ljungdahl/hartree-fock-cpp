@@ -56,7 +56,7 @@ add_executable(${PROJECT_NAME}
         src/Matrix.cpp
         src/GaussLegendre.cpp
         src/Eigenproblems.cpp
-        src/Vector.cpp src/HartreeFock.cpp src/HartreeFock.h src/linear_algebra_typedefs.h src/Parameters.h src/Parameters.cpp src/LapackUtility.cpp src/LapackUtility.h src/MKL_include_and_define.h)
+        src/Vector.cpp src/HartreeFock.cpp src/HartreeFock.h src/linear_algebra_typedefs.h src/Parameters.h src/Parameters.cpp src/MKL_utility_linear_algebra.cpp src/MKL_utility_linear_algebra.h src/MKL_include_and_define.h src/temporary_tests.h)
 
 if (UNIX)
     # Single Dynamic Link library used on my Arch Linu machine!

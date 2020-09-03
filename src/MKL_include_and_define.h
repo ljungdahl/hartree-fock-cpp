@@ -1,4 +1,5 @@
 #pragma once
+#include <complex>
 
 #define MKL_INTERFACE_LAYER LP64
 
@@ -13,7 +14,7 @@ ASSERT(expr == 0); \
 }
 
 namespace LAPACK {
-    enum MatrixLayout {
+    enum Layout {
         // Ref mkl_lapacke.h
         RowMajor = LAPACK_ROW_MAJOR,
         ColMajor = LAPACK_COL_MAJOR

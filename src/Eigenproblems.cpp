@@ -43,7 +43,7 @@ void LAPACK::Eigenproblems::GeneralisedComplexSolver(LAPACK::EigenParameters par
         Logger::Warn("LAPACK::Eigenproblems::GeneralComplexSolver(): computeRightEigvecs == 'N'.");
     }
 
-    LAPACK::MatrixLayout layout = params.matrixLayout;
+    LAPACK::Layout layout = params.matrixLayout;
 
     // Lapack destroys the input matrices, so we need to make local copies.
     // ZMatrix internal storage is a vector anyway and LAPACK routine just takes pointers.
@@ -132,7 +132,7 @@ void LAPACK::Eigenproblems::GeneralisedComplexSolver(LAPACK::EigenParameters par
     // NOTE(anton): I think they use one-indexing (Fortran) here, so we should instead say (for row major):
     // Eigenvector_j(i) = vr[i*ldvr + j]. Note that we use the sorted indices here to get the eigenvector.
     ASSERT(out_eigenvectors.numCols() == n && out_eigenvectors.numRows() == n);
-    ASSERT(layout == LAPACK::MatrixLayout::RowMajor);
+    ASSERT(layout == LAPACK::Layout::RowMajor);
     u32 ldvr = leadingDimRightEigvec;
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {

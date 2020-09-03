@@ -54,6 +54,12 @@ T* LA::Matrix<T>::GetDataPtr() {
 }
 
 template<class T>
+const T *LA::Matrix<T>::GetDataPtr() const {
+    return m_data.data();
+}
+
+
+template<class T>
 void LA::Matrix<T>::copyToVector(std::vector<T>& result) const {
     ASSERT(result.size() == m_data.size());
     result = m_data;
@@ -82,4 +88,25 @@ void LA::Matrix<T>::resize(u32 rows, u32 cols) {
     m_data.resize(rows*cols, T());
     m_rows = rows;
     m_cols = cols;
+}
+
+template<class T>
+void LA::Matrix<T>::setFromVector(std::vector<T> &vec) {
+    // This assumes that the layout is consistent between this matrix and vec.
+    // TODO(anton): Make this fail safe.
+    ASSERT(vec.size() == m_rows*m_cols);
+    m_data = vec;
+}
+
+
+template<class T>
+void LA::Matrix<T>::setFromMatrix(const LA::Matrix<T> &rhs) {
+    // This assumes that the layout is consistent between this matrix and vec.
+    // TODO(anton): Make this fail safe.
+    ASSERT(m_data.size() == rhs.totalSize());
+    m_data = rhs.GetDataRef();
+}
+template<class T>
+const std::vector<T> &LA::Matrix<T>::GetDataRef() const {
+    return this->m_data;
 }

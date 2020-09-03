@@ -12,7 +12,7 @@ namespace LAPACK {
 
 
     struct EigenParameters {
-        MatrixLayout matrixLayout = MatrixLayout::RowMajor;
+        Layout matrixLayout = Layout::RowMajor;
         bool computeLeftEigenvectors = false;
         bool computeRightEigenvectors = true;
         u32 squareMatrixOrder = 1; // set to N for a N x N-matrix.

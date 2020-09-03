@@ -12,6 +12,8 @@
 
 namespace LAPACK {
 
-    void InvertMatrixInPlace(Matrix &A);
+void InvertMatrixInPlace(Matrix &A);
 
 }
+
+Matrix MatMul(const Matrix &A, const Matrix &B);

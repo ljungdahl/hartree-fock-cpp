@@ -13,6 +13,7 @@
 #include "Bsplines.h"
 #include "GaussLegendre.h"
 #include "HartreeFock.h"
+#include "temporary_tests.h"
 
 typedef LA::Vector<Complex> Vector;
 
@@ -61,9 +62,19 @@ int main(int argc, char *argv[]) {
     // B^-1H'c = Ec, and we can solve for the Eigenvalues E and the
     // eigenvectors (Bspline coefficients) c.
 
-    Matrix B = Matrix();
+    Matrix B_inverse = Matrix();
     Matrix H = Matrix();
-    Atom::SetupHandBMatrices(H, B, Bsplines, systemParameters, GaussLegendreIntegration);
+
+    {
+        Matrix B = Matrix(); // A temporary B matrix that will be inverted and saved into B_inverse.
+
+        // This resizes H and B and sets up the matrix elements using gauss legendre integration of Bsplines.
+        Atom::SetupHandBMatrices(H, B, Bsplines, systemParameters, GaussLegendreIntegration);
+        LAPACK::InvertMatrixInPlace(B);
+        B_inverse.resize(B.numRows(), B.numCols());
+        B_inverse.setFromMatrix(B);
+    }
+
     // TODO(anton): We need to make an array of H_matrices, one for each subshell.
     // Or perhaps just make a "setup l(l+1)-term" routine and calculate on the fly to save memory?
     // Currently only He 1s^2, so we don't have a l(l+1)-term ( s -> l = 0).
@@ -74,7 +85,7 @@ int main(int argc, char *argv[]) {
 
     // The starting point for the HF solver will be just the independent particle
     // model without any electron-electron interaction.
-    hf.PerformInitialStep();
+    hf.PerformInitialStep(H, B_inverse);
 
     hf.SelfConsistentSolution();
 
@@ -83,6 +94,7 @@ int main(int argc, char *argv[]) {
 
 void Atom::SetupHandBMatrices(Matrix &H, Matrix &B, Atom::Bsplines &Bsplines,
         Atom::SystemParameters params, GaussLegendre::Integration &GLI) {
+    Logger::Trace("entered setupHandBMatrices");
     // The matrix dimension n (for square matrices of size n x n) are determined by
     // the number of bsplines used, thus we get the dimension from the number of elements in the
     // usedBsplineIndices array.

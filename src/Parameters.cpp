@@ -19,7 +19,10 @@ Atom::GridParameters Atom::GetGridParameters() {
 Atom::BsplineParameters Atom::GetBsplineParameters() {
 
     constexpr u32 bsplineOrder = 6;
-    constexpr u32 numKnotPoints = 80;
+    constexpr u32 numKnotPoints = 20;
+
+    u32 numberOfBsplines = numKnotPoints - bsplineOrder;
+    ASSERT(numberOfBsplines >= bsplineOrder);
 
     BsplineParameters params;
     params.bsplineOrder = bsplineOrder;

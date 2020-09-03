@@ -1,11 +1,12 @@
 #include "logger.h"
 #include "HartreeFock.h"
+#include "MKL_utility_linear_algebra.h"
 
 Atom::HartreeFock::HartreeFock() {
 
 }
 
-void Atom::HartreeFock::PerformInitialStep() {
+void Atom::HartreeFock::PerformInitialStep(Matrix& H, Matrix& B_inverse) {
     /* This function calculates the inital approximation to the orbital wavefunctions
      * in the Hartree-Fock approximation.
      * We start with the atomic Hamiltonian without any electron-electron interaction,
@@ -18,6 +19,11 @@ void Atom::HartreeFock::PerformInitialStep() {
      * B^-1H'c = Ec, and we can solve for the Eigenvalues E and the
      * eigenvectors (Bspline coefficients) c.
      */
+
+    Matrix LHS = MatMul(B_inverse, H); // LHS = B^-1 * H.
+
+    //TODO(anton): HERE COMES ZGEEVSOLVE!
+
 
 
 

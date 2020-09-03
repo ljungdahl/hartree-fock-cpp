@@ -7,10 +7,13 @@ namespace Atom {
 
 class HartreeFock {
 public:
-HartreeFock();
+    HartreeFock();
 
-void PerformInitialStep();
-void SelfConsistentSolution();
+    void PerformInitialStep(Matrix &H, Matrix &B_inverse);
+    void SelfConsistentSolution();
+
+private:
+
 };
 
 }
