@@ -22,6 +22,10 @@ namespace LAPACK {
     public:
         Eigenproblems();
 
+        // This routine is a wrapper around zgeev.
+        void NonsymmetricComplexSolver(EigenParameters params, const ZMatrix &A_Matrix,
+                                      ZVector &out_eigenvalues, ZMatrix &out_eigenvectors);
+
         void GeneralisedComplexSolver(EigenParameters params, const ZMatrix &A_Matrix, const ZMatrix &B_matrix,
                                       ZVector &out_eigenvalues, ZMatrix &out_eigenvectors);
     private:

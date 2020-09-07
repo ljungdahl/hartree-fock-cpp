@@ -22,6 +22,7 @@ namespace Atom {
     void SetupHandBMatrices(Matrix &H, Matrix &B, Atom::Bsplines &Bsplines,
                             Atom::SystemParameters params, GaussLegendre::Integration &GLI);
 }
+void TestGLI(GaussLegendre::Integration &GLI);
 
 int main(int argc, char *argv[]) {
 
@@ -75,6 +76,8 @@ int main(int argc, char *argv[]) {
         B_inverse.setFromMatrix(B);
     }
 
+//    TestGLI(GaussLegendreIntegration);
+
     // TODO(anton): We need to make an array of H_matrices, one for each subshell.
     // Or perhaps just make a "setup l(l+1)-term" routine and calculate on the fly to save memory?
     // Currently only He 1s^2, so we don't have a l(l+1)-term ( s -> l = 0).
@@ -87,9 +90,40 @@ int main(int argc, char *argv[]) {
     // model without any electron-electron interaction.
     hf.PerformInitialStep(H, B_inverse);
 
-    hf.SelfConsistentSolution();
+//    hf.SelfConsistentSolution();
 
     return 0;
+}
+
+void TestGLI(GaussLegendre::Integration &GLI) {
+
+    auto integrate_interval = [&](Complex a, Complex b) {
+        u32 numIntegrationPoints = 6;
+        auto abscissae = GLI.getShiftedAbscissae(a, b, numIntegrationPoints);
+        ASSERT(abscissae.size() == numIntegrationPoints);
+        auto prefactor = GLI.b_minus_a_half(a, b);
+        if (std::abs(prefactor) < 1e-8) {
+            return Complex(0.0);
+        }
+        auto pWeights = GLI.getPointerToZWeights(numIntegrationPoints);
+
+        Complex term = Complex(0.0);
+        for (int m = 0; m < numIntegrationPoints; ++m) {
+            auto r = abscissae[m];
+            auto r2 = r*r;
+            term += prefactor * pWeights[m] * r2;
+        }
+
+        return term;
+    };
+
+    Complex integrate_x2 = Complex(0.0);
+    integrate_x2 += integrate_interval(0.0, 0.5);
+    integrate_x2 += integrate_interval(0.5, 1.0);
+
+    Logger::Trace("integrate_x2 = (%f, %f), "
+                  "The integral of x^2 from zero to one is 1/3.", integrate_x2.real(), integrate_x2.imag());
+
 }
 
 void Atom::SetupHandBMatrices(Matrix &H, Matrix &B, Atom::Bsplines &Bsplines,
@@ -132,7 +166,7 @@ void Atom::SetupHandBMatrices(Matrix &H, Matrix &B, Atom::Bsplines &Bsplines,
         // Integrals are perfomed using gaussian quadrature.
         for (int m = 0; m < numIntegrationPoints; ++m) {
             // First \int dr B_j (-0.5*d_r^2) B_i. We can show that this in fact is equal to
-            // 0.5\int dr dB_j/dr dB_i/dr.
+            // 0.5\int dr dB_j/dr dB_i/dr, without 0.5 factor.
             Complex dB_i = Bsplines.GetDerivativeAtCoordinate(abscissae[m], bsplineIndex_i);
             Complex dB_j = Bsplines.GetDerivativeAtCoordinate(abscissae[m], bsplineIndex_j);
             auto f = dB_j * dB_i;
@@ -141,12 +175,12 @@ void Atom::SetupHandBMatrices(Matrix &H, Matrix &B, Atom::Bsplines &Bsplines,
             Complex B_i = Bsplines.GetBsplineAtCoordinate(abscissae[m], bsplineIndex_i);
             Complex B_j = Bsplines.GetBsplineAtCoordinate(abscissae[m], bsplineIndex_j);
             if (l > 0.0) {
-                // term2: \int B_j l(l+1)/r^2 B_i dr
+                // term2: \int B_j l(l+1)/r^2 B_i dr, without l(l+1)
                 Complex r2 = abscissae[m] * abscissae[m];
                 f = B_j * B_i / r2;
                 term2 += prefactor * pWeights[m] * f;
             }
-            // term3: \int B_j Z/r B_i dr
+            // term3: \int B_j Z/r B_i dr, without Z factor.
             Complex r = abscissae[m];
             f = B_j * B_i / r;
             term3 += prefactor * pWeights[m] * f;
@@ -155,6 +189,7 @@ void Atom::SetupHandBMatrices(Matrix &H, Matrix &B, Atom::Bsplines &Bsplines,
         // H_ij = \int B_j (-0.5*d_r^2 + 0.5*l(l+1)/r^2 - Z/r) B_i
         f64 lfactor = l * (l + 1.0);
         Complex return_value = 0.5 * term1;
+//        Complex return_value = 0.5 * Complex(0.0);
         if (lfactor > 0.0) {
             return_value += (0.5 * lfactor) * term2;
         }
@@ -193,12 +228,12 @@ void Atom::SetupHandBMatrices(Matrix &H, Matrix &B, Atom::Bsplines &Bsplines,
 
     // TODO(anton): We're testing on He 1s^2 right now. Need to make this work with general
     // subshells later!!!
-    f64 l_double = (f64) params.shells[0].l;
-    f64 Z_double = (f64) params.Z;
+    f64 l_f64 = (f64) params.shells[0].l;
+    f64 Z_f64 = (f64) params.Z;
 
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
-            H(i, j) = calculate_H_matrix_element(i, j, l_double, Z_double);
+            H(i, j) = calculate_H_matrix_element(i, j, l_f64, Z_f64);
             B(i, j) = calculate_B_matrix_element(i, j);
         }
     }

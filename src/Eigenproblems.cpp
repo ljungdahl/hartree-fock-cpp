@@ -72,16 +72,16 @@ void LAPACK::Eigenproblems::GeneralisedComplexSolver(LAPACK::EigenParameters par
     rightEigVecs.resize(n * n);
 
     LAPACK_CHECK(
-            LAPACKE_zggev3(layout, computeLeft, computeRight, n,
-                          temp_A.dataPtr(), leadingDimension_A,
-                          temp_B.dataPtr(), leadingDimension_B,
-                          alpha.dataPtr(), beta.dataPtr(),
-                          leftEigVecs.dataPtr(), leadingDimLeftEigvec,
-                          rightEigVecs.dataPtr(), leadingDimRightEigvec)
+        LAPACKE_zggev3(layout, computeLeft, computeRight, n,
+                       temp_A.dataPtr(), leadingDimension_A,
+                       temp_B.dataPtr(), leadingDimension_B,
+                       alpha.dataPtr(), beta.dataPtr(),
+                       leftEigVecs.dataPtr(), leadingDimLeftEigvec,
+                       rightEigVecs.dataPtr(), leadingDimRightEigvec)
     );
 
     Logger::Log(
-            "LAPACK::Eigenproblems::GeneralComplexSolver(): Call to LAPACKE_zggev finished successfully (INFO == 0)");
+        "LAPACK::Eigenproblems::GeneralComplexSolver(): Call to LAPACKE_zggev finished successfully (INFO == 0)");
 
 
 //    Logger::Trace("i alpha[i]:              beta[i]:       alpha[i]/beta[i]     ");
@@ -93,7 +93,6 @@ void LAPACK::Eigenproblems::GeneralisedComplexSolver(LAPACK::EigenParameters par
             Logger::Warn("LAPACK::Eigenproblems::GeneralComplexSolver(): \n"
                          "beta[%i] < 1e-8, eigenvalue %i uses only alpha component. (should be infinity)", i);
         }
-
 
         val = alpha[i] / beta[i];
         unsorted_eigenvalues.push_back(val);
@@ -139,6 +138,80 @@ void LAPACK::Eigenproblems::GeneralisedComplexSolver(LAPACK::EigenParameters par
             u32 unsorted_index = old_indices[j];
             out_eigenvectors(i, j) = rightEigVecs[i * ldvr + unsorted_index];
         }
+    }
+
+}
+void LAPACK::Eigenproblems::NonsymmetricComplexSolver(LAPACK::EigenParameters params,
+                                                      const ZMatrix &A_Matrix,
+                                                      ZVector &out_eigenvalues,
+                                                      ZMatrix &out_eigenvectors) {
+    // This function wraps the zgeev LAPACK-routine which solves the nonsymmetric eigenvalue problem
+    // Ac = Ec.
+    //TODO(anton): Also implement left eigenvectors, currently only working for right eigenvectors.
+
+    u32 n = params.squareMatrixOrder;
+    Logger::Trace("n: %i", n);
+    ASSERT(n * n == A_Matrix.totalSize());
+    u32 leadingDimension_A = n;
+    u32 leadingDimRightEigvec = n;
+    u32 leadingDimLeftEigvec = 1; // NOTE(anton): currently only right eigvecs supported here.
+
+    LAPACK::Layout layout = params.matrixLayout;
+
+    auto computeLeft = 'N';
+    auto computeRight = params.computeRightEigenvectors ? 'V' : 'N';
+    if (computeRight == 'N') {
+        Logger::Warn("LAPACK::Eigenproblems::GeneralComplexSolver(): computeRightEigvecs == 'N'.");
+    }
+
+    // Lapack destroys the input matrices, so we need to make local copies.
+    // ZMatrix internal storage is a vector anyway and LAPACK routine just takes pointers.
+    // Thus it is easy to use std::vectors for the local data and we can hope the compiler can do some
+    // nice things for the copy operation.
+    ZVector temp_A; //
+    temp_A.resize(n * n);
+    A_Matrix.copyToVector(temp_A.data());
+
+    // The generalised eigenvalue is a ratio E = alpha / beta, and what we get back from zggev are arrays
+    // with the n values alpha and beta.
+    ZVector unsorted_eigenvalues;
+    unsorted_eigenvalues.resize(n);
+    ZVector eigenvalues;
+    eigenvalues.resize(n);
+
+//     NOTE(anton): Currently not used
+//    ZVector leftEigVecs;
+//    leftEigVecs.resize(1);
+
+    ZVector rightEigVecs;
+    rightEigVecs.resize(n * n);
+
+    auto info = LAPACKE_zgeev(layout, computeLeft, computeRight,
+                              n, temp_A.dataPtr(), leadingDimension_A,
+                              unsorted_eigenvalues.dataPtr(),
+        /* left eig vecs*/nullptr, /* ldvl */n, // For some reason I get zgeev_work error with ldvl == 1.
+                              rightEigVecs.dataPtr(), /*ldvr*/n);
+
+    if(info == 0) {
+        Logger::Log(
+            "LAPACK::Eigenproblems::NonsymmetricComplexSolver(): Call to LAPACKE_zgeev finished successfully (INFO == 0)");
+    } else {
+        Logger::Error("LAPACK::Eigenproblems::NonsymmetricComplexSolver(): INFO == %i", info);
+    }
+
+
+//    Logger::Trace("i alpha[i]:              beta[i]:       alpha[i]/beta[i]     ");
+
+    auto old_indices = sortZVectorIndices(unsorted_eigenvalues);
+
+    u32 i = 0;
+    for (auto i_old : old_indices) {
+        eigenvalues[i] = unsorted_eigenvalues[i_old];
+        i++;
+    }
+
+    for (auto eigval : eigenvalues.data()) {
+        Logger::Trace("(%f, %f)", eigval.real(), eigval.imag());
     }
 
 }
